@@ -231,9 +231,9 @@ input[type="text"] {
 
 .search-results {
     display: grid;
-    grid-template-columns: repeat(4, 1fr); /* 4 tarjetas por fila */
-    gap: 15px;
-    padding: 20px 0;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 12px;
+    padding: 15px 10px;
     justify-content: center;
 }
 
@@ -241,7 +241,7 @@ input[type="text"] {
     display: flex;
     flex-direction: column;
     width: 100%;
-    max-width: 220px;
+    max-width: 120px;
     margin: 0 auto;
     background: var(--card-background);
     border-radius: 8px;
@@ -257,68 +257,73 @@ input[type="text"] {
 
 .movie-poster {
     width: 100%;
-    height: 330px;
+    aspect-ratio: 2/3;
     object-fit: cover;
     border-radius: 8px 8px 0 0;
 }
 
 .search-results .movie-info {
-    padding: 12px;
+    padding: 6px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 4px;
 }
 
 .search-results .movie-info h3 {
-    font-size: 0.95em;
+    font-size: 0.8em;
     margin: 0;
-    line-height: 1.3;
-    height: 2.6em;
+    line-height: 1.2;
+    height: 2.4em;
     overflow: hidden;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
+    text-align: center;
 }
 
 .search-results .movie-details {
     display: flex;
-    justify-content: space-between;
-    font-size: 0.8em;
+    justify-content: center;
+    gap: 8px;
+    font-size: 0.7em;
     color: var(--text-color);
     opacity: 0.9;
 }
 
 .search-results .movie-actions {
-    padding: 0 12px 12px;
+    padding: 4px 6px 6px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
 }
 
 .search-results .button {
     width: 100%;
     text-align: center;
-    padding: 8px;
-    font-size: 0.85em;
+    padding: 6px;
+    font-size: 0.75em;
     margin: 0;
+    border-radius: 4px;
 }
 
 /* Responsive grid */
 @media (max-width: 1200px) {
     .search-results {
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(4, 1fr);
     }
 }
 
 @media (max-width: 900px) {
     .search-results {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(3, 1fr);
     }
 }
 
 @media (max-width: 600px) {
     .search-results {
-        grid-template-columns: repeat(1, 1fr);
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .search-results .movie-card {
+        max-width: 150px;
     }
 }
 
