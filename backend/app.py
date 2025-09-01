@@ -70,8 +70,20 @@ def load_user(user_id):
 TRANSMISSION_URL = "http://transmission:9091/transmission/rpc"
 TRANSMISSION_USER = "admin"
 TRANSMISSION_PASS = "1234"
-# También habilitamos el modo debug para ver más detalles
-app.debug = True
+
+# --- Funciones auxiliares ---
+def update_movie_status(download_id, new_status):
+    """Actualiza el estado de una película en la base de datos"""
+    try:
+        download = Download.query.get(download_id)
+        if download:
+            download.status = new_status
+            db.session.commit()
+            return True
+        return False
+    except Exception as e:
+        app.logger.error(f"Error al actualizar estado: {str(e)}")
+        return False
 
 # --- Rutas de Autenticación ---
 @app.route('/login', methods=['GET', 'POST'])
@@ -169,43 +181,35 @@ def delete_from_transmission(hash_value):
         app.logger.error(f"Error eliminando torrent de Transmission: {str(e)}")
         return False
 
-def load_movies():
-    try:
-        with open(MOVIES_FILE) as f:
-            return json.load(f)
-    except:
-        return []
 
-def save_movies(movies):
-    with open(MOVIES_FILE, "w") as f:
-        json.dump(movies, f, indent=2)
 
 @app.route('/delete/<int:movie_id>', methods=['POST'])
+@login_required
 def delete_movie(movie_id):
     """Elimina una película de la lista y de Transmission"""
     try:
-        movies = load_movies()
-        if 0 <= movie_id < len(movies):
-            movie = movies[movie_id]
+        download = Download.query.filter_by(id=movie_id, user_id=current_user.id).first()
+        if not download:
+            return {"error": "Película no encontrada"}, 404
             
-            # Si la película está en descarga o completada, la eliminamos de Transmission
-            if movie.get('status') in ['descargando', 'completado']:
-                # Extraer el hash del magnet link
-                magnet = movie.get('magnet', '')
-                hash_match = magnet.split('btih:')[1].split('&')[0] if 'btih:' in magnet else None
-                
-                if hash_match:
-                    app.logger.info(f"Intentando eliminar torrent con hash: {hash_match}")
-                    if not delete_from_transmission(hash_match):
-                        app.logger.warning("No se pudo eliminar el torrent de Transmission")
-                else:
-                    app.logger.warning("No se encontró el hash en el magnet link")
+        # Si la película está en descarga o completada, la eliminamos de Transmission
+        if download.status in ['descargando', 'completado']:
+            # Extraer el hash del magnet link
+            magnet = download.magnet
+            hash_match = magnet.split('btih:')[1].split('&')[0] if 'btih:' in magnet else None
             
-            # Eliminar de la lista
-            del movies[movie_id]
-            save_movies(movies)
-            return {"message": "Película eliminada"}, 200
-        return {"error": "Película no encontrada"}, 404
+            if hash_match:
+                app.logger.info(f"Intentando eliminar torrent con hash: {hash_match}")
+                if not delete_from_transmission(hash_match):
+                    app.logger.warning("No se pudo eliminar el torrent de Transmission")
+            else:
+                app.logger.warning("No se encontró el hash en el magnet link")
+        
+        # Eliminar de la base de datos
+        db.session.delete(download)
+        db.session.commit()
+        
+        return {"message": "Película eliminada"}, 200
     except Exception as e:
         app.logger.error(f"Error al eliminar película: {str(e)}")
         return {"error": "Error interno del servidor"}, 500
@@ -329,35 +333,6 @@ def add_movie():
             # Si falla la descarga, mantener como pendiente
             flash('Película agregada pero hubo un error al iniciar la descarga', 'warning')
             return {"message": "Película agregada pero error al iniciar descarga"}, 200
-            'year': movie_data.get('year', ''),
-            'rating': movie_data.get('rating', ''),
-            'status': 'pendiente',
-            'imdb_code': movie_data.get('imdb_code', '')
-        }
-
-        # Agregar a la lista y guardar
-        movies.append(movie_info)
-        try:
-            save_movies(movies)
-        except Exception as e:
-            app.logger.error(f"Error al guardar películas: {str(e)}")
-            return {"error": "Error al guardar la película"}, 500
-
-        # Intentar iniciar la descarga
-        result = add_to_transmission(movie_info['magnet'])
-        if result is None:
-            return {"message": "Película agregada, pero hubo un error al iniciar la descarga. Intente descargarla más tarde."}, 200
-        
-        movie_info['status'] = 'descargando'
-        try:
-            save_movies(movies)
-        except Exception as e:
-            app.logger.error(f"Error al actualizar estado: {str(e)}")
-            # No devolvemos error porque la película ya está agregada
-            return {"message": "Película agregada y descarga iniciada, pero hubo un error al actualizar el estado"}, 200
-            
-        return {"message": "Película agregada y descarga iniciada"}, 200
-            
     except Exception as e:
         app.logger.error(f"Error al agregar película: {str(e)}")
         return {"error": f"Error interno del servidor: {str(e)}"}, 500
@@ -426,26 +401,26 @@ def add_to_transmission(magnet):
         return None
 
 @app.route('/download/<int:movie_id>', methods=['POST'])
+@login_required
 def download_movie(movie_id):
     """Inicia la descarga de una película en Transmission"""
     try:
-        movies = load_movies()
-        if 0 <= movie_id < len(movies):
-            movie = movies[movie_id]
-            result = add_to_transmission(movie['magnet'])
+        download = Download.query.filter_by(id=movie_id, user_id=current_user.id).first()
+        if not download:
+            return {"error": "Película no encontrada"}, 404
             
-            if result and 'result' in result and result['result'] == 'success':
-                movies[movie_id]['status'] = 'descargando'
-                save_movies(movies)
-                return {"message": "Descarga iniciada"}, 200
-            else:
-                return {"error": "Error al iniciar la descarga"}, 500
-        return {"error": "Película no encontrada"}, 404
+        result = add_to_transmission(download.magnet)
+        
+        if result and 'result' in result and result['result'] == 'success':
+            update_movie_status(movie_id, 'descargando')
+            return {"message": "Descarga iniciada"}, 200
+        else:
+            return {"error": "Error al iniciar la descarga"}, 500
     except Exception as e:
         app.logger.error(f"Error en descarga: {str(e)}")
         return {"error": "Error interno del servidor"}, 500
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000)
 
 
