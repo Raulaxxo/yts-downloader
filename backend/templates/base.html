@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{% block title %}YTS Downloader{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+    <div class="theme-switch-wrapper">
+        <label class="theme-switch" for="checkbox">
+            <input type="checkbox" id="checkbox" />
+            <div class="slider round">
+                <span class="slider-icon sun">☀️</span>
+                <span class="slider-icon moon">🌙</span>
+            </div>
+        </label>
+    </div>
+    
+    <div class="container">
+        <nav class="navbar">
+            <a href="/" class="nav-link {% if request.endpoint == 'index' %}active{% endif %}">Mis Películas</a>
+            <a href="/search" class="nav-link {% if request.endpoint == 'search' %}active{% endif %}">Buscar</a>
+        </nav>
+
+        {% block content %}{% endblock %}
+    </div>
+
+    <script src="{{ url_for('static', filename='darkMode.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

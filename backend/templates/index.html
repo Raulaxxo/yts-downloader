@@ -1,28 +1,9 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>YTS Downloader - Películas 1080p</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body>
-    <div class="theme-switch-wrapper">
-        <label class="theme-switch" for="checkbox">
-            <input type="checkbox" id="checkbox" />
-            <div class="slider round">
-                <span class="slider-icon sun">☀️</span>
-                <span class="slider-icon moon">🌙</span>
-            </div>
-        </label>
-    </div>
-    <div class="container">
-        <nav class="navbar">
-            <a href="/" class="nav-link active">Mis Películas</a>
-            <a href="/search" class="nav-link">Buscar</a>
-        </nav>
+{% extends "base.html" %}
 
-        <h1>Mis Películas</h1>
+{% block title %}YTS Downloader - Películas 1080p{% endblock %}
+
+{% block content %}
+<h1>Mis Películas</h1>
 
         <div class="movies-list">
             {% for movie in movies %}
@@ -73,70 +54,48 @@
             {% endfor %}
         </div>
     </div>
+{% endblock %}
 
-    <script>
-    async function startDownload(movieId) {
+{% block scripts %}
+<script>
+async function startDownload(movieId) {
+    try {
+        const response = await fetch(`/download/${movieId}`, {
+            method: 'POST'
+        });
+        const data = await response.json();
+        
+        if (response.ok) {
+            alert('Descarga iniciada correctamente');
+            location.reload();
+        } else {
+            alert(data.error || 'Error al iniciar la descarga');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error al comunicarse con el servidor');
+    }
+}
+
+async function deleteMovie(movieId) {
+    if (confirm('¿Estás seguro de que quieres eliminar esta película de tu lista?')) {
         try {
-            const response = await fetch(`/download/${movieId}`, {
+            const response = await fetch(`/delete/${movieId}`, {
                 method: 'POST'
             });
             const data = await response.json();
             
             if (response.ok) {
-                alert('Descarga iniciada correctamente');
+                alert('Película eliminada correctamente');
                 location.reload();
             } else {
-                alert(data.error || 'Error al iniciar la descarga');
+                alert(data.error || 'Error al eliminar la película');
             }
         } catch (error) {
             console.error('Error:', error);
             alert('Error al comunicarse con el servidor');
         }
     }
-
-    async function deleteMovie(movieId) {
-        if (confirm('¿Estás seguro de que quieres eliminar esta película de tu lista?')) {
-            try {
-                const response = await fetch(`/delete/${movieId}`, {
-                    method: 'POST'
-                });
-                const data = await response.json();
-                
-                if (response.ok) {
-                    alert('Película eliminada correctamente');
-                    location.reload();
-                } else {
-                    alert(data.error || 'Error al eliminar la película');
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                alert('Error al comunicarse con el servidor');
-            }
-        }
-    }
-
-    // Modo Oscuro
-    const toggleSwitch = document.querySelector('#checkbox');
-    const currentTheme = localStorage.getItem('theme');
-
-    if (currentTheme) {
-        document.documentElement.setAttribute('data-theme', currentTheme);
-        if (currentTheme === 'dark') {
-            toggleSwitch.checked = true;
-        }
-    }
-
-    function switchTheme(e) {
-        if (e.target.checked) {
-            document.documentElement.setAttribute('data-theme', 'dark');
-            localStorage.setItem('theme', 'dark');
-        } else {
-            document.documentElement.setAttribute('data-theme', 'light');
-            localStorage.setItem('theme', 'light');
-        }
-    }
-
-    toggleSwitch.addEventListener('change', switchTheme, false);
-    </script>
-</body>
-</html>
+}
+</script>
+{% endblock %}

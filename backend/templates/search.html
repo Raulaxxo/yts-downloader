@@ -1,105 +1,86 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Buscar Películas - YTS Downloader</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body>
-    <div class="theme-switch-wrapper">
-        <label class="theme-switch" for="checkbox">
-            <input type="checkbox" id="checkbox" />
-            <div class="slider round">
-                <span class="slider-icon sun">☀️</span>
-                <span class="slider-icon moon">🌙</span>
-            </div>
-        </label>
-    </div>
-    <div class="container">
-        <nav class="navbar">
-            <a href="/" class="nav-link">Mis Películas</a>
-            <a href="/search" class="nav-link active">Buscar</a>
-        </nav>
+{% extends "base.html" %}
 
-        <h1>Buscar Películas</h1>
+{% block title %}Buscar Películas - YTS Downloader{% endblock %}
+
+{% block content %}
+<h1>Buscar Películas</h1>
         
-        <form method="GET" class="search-form">
-            <input type="text" name="query" placeholder="Buscar película..." value="{{ query }}" required>
-            <button type="submit" class="button">Buscar</button>
-        </form>
+<form method="GET" class="search-form">
+    <input type="text" name="query" placeholder="Buscar película..." value="{{ query }}" required>
+    <button type="submit" class="button">Buscar</button>
+</form>
 
-        {% if results %}
-        <div class="search-results">
-            {% for movie in results %}
-            <div class="movie-card">
-                <img src="{{ movie.medium_cover_image }}" alt="{{ movie.title }}" class="movie-poster">
-                <div class="movie-info">
-                    <h3>{{ movie.title_long }}</h3>
-                    <div class="movie-details">
-                        <span class="movie-year">📅 {{ movie.year }}</span>
-                        <span class="movie-rating">⭐ {{ movie.rating }}/10</span>
-                        {% if movie.language %}
-                        <span class="movie-language">🗣 {{ movie.language }}</span>
-                        {% endif %}
-                    </div>
-                    {% if movie.summary %}
-                    <p class="movie-summary">{{ movie.summary[:200] }}...</p>
-                    {% endif %}
-                    <div class="movie-actions">
-                        <button class="button add-movie" 
-                                onclick="addMovie({
-                                    title: '{{ movie.title_long }}',
-                                    year: '{{ movie.year }}',
-                                    rating: '{{ movie.rating }}',
-                                    magnet: '{{ build_magnet(movie)|safe }}',
-                                    subs: 'https://yifysubtitles.org/movie-imdb/{{ movie.imdb_code }}',
-                                    imdb_code: '{{ movie.imdb_code }}'
-                                })">
-                            Agregar y Descargar
-                        </button>
-                        <a href="https://www.imdb.com/title/{{ movie.imdb_code }}" 
-                           target="_blank" 
-                           class="button secondary-button">
-                            Ver en IMDb
-                        </a>
-                    </div>
-                </div>
+{% if results %}
+<div class="search-results">
+    {% for movie in results %}
+    <div class="movie-card">
+        <img src="{{ movie.medium_cover_image }}" alt="{{ movie.title }}" class="movie-poster">
+        <div class="movie-info">
+            <h3>{{ movie.title_long }}</h3>
+            <div class="movie-details">
+                <span class="movie-year">📅 {{ movie.year }}</span>
+                <span class="movie-rating">⭐ {{ movie.rating }}/10</span>
+                {% if movie.language %}
+                <span class="movie-language">🗣 {{ movie.language }}</span>
+                {% endif %}
             </div>
-            {% endfor %}
+            {% if movie.summary %}
+            <p class="movie-summary">{{ movie.summary[:200] }}...</p>
+            {% endif %}
+            <div class="movie-actions">
+                <button class="button add-movie" 
+                        onclick="addMovie({
+                            title: '{{ movie.title_long }}',
+                            year: '{{ movie.year }}',
+                            rating: '{{ movie.rating }}',
+                            magnet: '{{ build_magnet(movie)|safe }}',
+                            subs: 'https://yifysubtitles.org/movie-imdb/{{ movie.imdb_code }}',
+                            imdb_code: '{{ movie.imdb_code }}'
+                        })">
+                    Agregar y Descargar
+                </button>
+                <a href="https://www.imdb.com/title/{{ movie.imdb_code }}" 
+                   target="_blank" 
+                   class="button secondary-button">
+                    Ver en IMDb
+                </a>
+            </div>
         </div>
-        {% elif query %}
-        <div class="empty-state">
-            <p class="no-results">No se encontraron resultados para "{{ query }}"</p>
-            <p class="suggestion">Intenta con otro término de búsqueda</p>
-        </div>
-        {% endif %}
     </div>
+    {% endfor %}
+</div>
+{% elif query %}
+<div class="empty-state">
+    <p class="no-results">No se encontraron resultados para "{{ query }}"</p>
+    <p class="suggestion">Intenta con otro término de búsqueda</p>
+</div>
+{% endif %}
+{% endblock %}
 
-    <script>
-        async function addMovie(movieData) {
-            try {
-                const response = await fetch('/add', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(movieData)
-                });
-                
-                const result = await response.json();
-                
-                if (response.ok) {
-                    alert(result.message);
-                    window.location.href = '/'; // Redirigir a la lista de películas
-                } else {
-                    alert(result.error || 'Error al agregar la película');
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                alert('Error al comunicarse con el servidor');
-            }
+{% block scripts %}
+<script>
+async function addMovie(movieData) {
+    try {
+        const response = await fetch('/add', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(movieData)
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            alert(result.message);
+            window.location.href = '/'; // Redirigir a la lista de películas
+        } else {
+            alert(result.error || 'Error al agregar la película');
         }
-    </script>
-</body>
-</html>
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error al comunicarse con el servidor');
+    }
+}
+</script>
+{% endblock %}
