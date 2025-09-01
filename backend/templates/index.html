@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>YTS Downloader - Películas 1080p</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+    <div class="container">
+        <nav class="navbar">
+            <a href="/" class="nav-link active">Mis Películas</a>
+            <a href="/search" class="nav-link">Buscar</a>
+        </nav>
+
+        <h1>Mis Películas</h1>
+
+        <ul class="movies-list">
+            {% for movie in movies %}
+            <li class="movie-item">
+                <div class="movie-info">
+                    <span class="movie-title">{{ movie.title }}</span>
+                    <span class="movie-status status-{{ movie.status }}">{{ movie.status }}</span>
+                </div>
+                {% if movie.magnet %}
+                <div class="movie-links">
+                    <a href="{{ movie.magnet }}" title="Descargar Torrent">
+                        📥 Descargar
+                    </a>
+                    <a href="{{ movie.subs }}" target="_blank" title="Descargar Subtítulos">
+                        💬 Subtítulos
+                    </a>
+                </div>
+                {% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+</body>
+</html>

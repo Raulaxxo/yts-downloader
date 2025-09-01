@@ -1,0 +1,46 @@
+# version: "3.9"
+
+services:
+  backend:
+    build: ./backend
+    container_name: yts_backend
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend/movies.json:/app/movies.json
+    depends_on:
+      - transmission
+
+  transmission:
+    image: linuxserver/transmission
+    container_name: transmission
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Santiago
+      - USER=admin
+      - PASS=1234
+      - PEERPORT=51413
+    ports:
+      - "9091:9091"
+      - "51413:51413"
+      - "51413:51413/udp"
+    volumes:
+      - ./downloads:/downloads
+      - ./transmission_config:/config
+    restart: unless-stopped
+
+  plex:
+    image: linuxserver/plex
+    container_name: plex
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - VERSION=latest
+      - TZ=America/Santiago
+    volumes:
+      - ./downloads:/movies   # Plex lee las descargas
+      - ./plex_config:/config
+    ports:
+      - "32400:32400"
+    restart: unless-stopped

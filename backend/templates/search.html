@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Buscar Películas - YTS Downloader</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+    <div class="container">
+        <nav class="navbar">
+            <a href="/" class="nav-link">Mis Películas</a>
+            <a href="/search" class="nav-link active">Buscar</a>
+        </nav>
+
+        <h1>Buscar Películas</h1>
+        
+        <form method="GET" class="search-form">
+            <input type="text" name="query" placeholder="Buscar película..." value="{{ query }}" required>
+            <button type="submit" class="button">Buscar</button>
+        </form>
+
+        {% if results %}
+        <div class="search-results">
+            {% for movie in results %}
+            <div class="movie-card" data-movie='{"title": "{{ movie.title_long }}", "year": "{{ movie.year }}", "rating": "{{ movie.rating }}"}'>
+                <img src="{{ movie.medium_cover_image }}" alt="{{ movie.title }}" class="movie-poster">
+                <div class="movie-info">
+                    <h3>{{ movie.title_long }}</h3>
+                    <p>Año: {{ movie.year }} | Rating: {{ movie.rating }}/10</p>
+                    <div class="movie-actions">
+                        <button class="button add-movie" 
+                                onclick="addMovie({
+                                    title: '{{ movie.title_long }}',
+                                    year: '{{ movie.year }}',
+                                    rating: '{{ movie.rating }}',
+                                    magnet: '{{ build_magnet(movie)|safe }}',
+                                    subs: 'https://yifysubtitles.org/movie-imdb/{{ movie.imdb_code }}'
+                                })">
+                            Agregar a Transmission
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% elif query %}
+        <p class="no-results">No se encontraron resultados para "{{ query }}"</p>
+        {% endif %}
+    </div>
+
+    <script>
+        async function addMovie(movieData) {
+            try {
+                const response = await fetch('/add', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(movieData)
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    alert('Película agregada correctamente');
+                } else {
+                    alert(result.error || 'Error al agregar la película');
+                }
+            } catch (error) {
+                alert('Error al comunicarse con el servidor');
+                console.error('Error:', error);
+            }
+        }
+    </script>
+</body>
+</html>
