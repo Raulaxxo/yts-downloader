@@ -231,9 +231,9 @@ input[type="text"] {
 
 .search-results {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-    gap: 12px;
-    padding: 15px 10px;
+    grid-template-columns: repeat(5, 1fr); /* 5 tarjetas por fila */
+    gap: 15px;
+    padding: 20px 0;
     justify-content: center;
 }
 
@@ -241,7 +241,7 @@ input[type="text"] {
     display: flex;
     flex-direction: column;
     width: 100%;
-    max-width: 120px;
+    max-width: 180px;
     margin: 0 auto;
     background: var(--card-background);
     border-radius: 8px;
@@ -257,7 +257,7 @@ input[type="text"] {
 
 .movie-poster {
     width: 100%;
-    aspect-ratio: 2/3;
+    aspect-ratio: 1/1;
     object-fit: cover;
     border-radius: 8px 8px 0 0;
 }
