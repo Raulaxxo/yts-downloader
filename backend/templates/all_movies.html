@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Todas las Películas - YTS Downloader{% endblock %}
+
+{% block content %}
+<h1 class="page-title">Todas las Películas</h1>
+
+<div class="movies-grid">
+    {% for movie in movies %}
+    <div class="movie-card">
+        <div class="movie-info">
+            <h3 class="movie-title">{{ movie.movie_title }}</h3>
+            <div class="movie-details">
+                {% if movie.year %}
+                <span>📅 {{ movie.year }}</span>
+                {% endif %}
+                {% if movie.rating %}
+                <span>⭐ {{ movie.rating }}/10</span>
+                {% endif %}
+                {% if movie.imdb_code %}
+                <a href="https://www.imdb.com/title/{{ movie.imdb_code }}" target="_blank" class="imdb-link">
+                    🎬 IMDB
+                </a>
+                {% endif %}
+            </div>
+            <div class="movie-meta">
+                <span class="user-info">👤 {{ movie.user.username }}</span>
+                <span class="date-info">📅 {{ movie.download_date.strftime('%d/%m/%Y') }}</span>
+            </div>
+            <div class="movie-status">
+                <span class="status-badge {{ movie.status }}">{{ movie.status }}</span>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% if not movies %}
+<div class="empty-state">
+    <p class="no-results">No hay películas agregadas aún</p>
+</div>
+{% endif %}
+{% endblock %}

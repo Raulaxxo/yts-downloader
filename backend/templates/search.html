@@ -3,30 +3,45 @@
 {% block title %}Buscar Películas - YTS Downloader{% endblock %}
 
 {% block content %}
-<h1>Buscar Películas</h1>
+<h1 class="page-title">Buscar Películas</h1>
         
 <form method="GET" class="search-form">
-    <input type="text" name="query" placeholder="Buscar película..." value="{{ query }}" required>
-    <button type="submit" class="button">Buscar</button>
+    <input type="text" 
+           name="query" 
+           placeholder="Buscar película..." 
+           value="{{ query }}" 
+           autocomplete="off"
+           required>
+    <button type="submit">Buscar</button>
 </form>
 
 {% if results %}
-<div class="search-results">
-    {% for movie in results %}
-    <div class="movie-card">
-        <img src="{{ movie.medium_cover_image }}" alt="{{ movie.title }}" class="movie-poster">
-        <div class="movie-info">
-            <h3>{{ movie.title_long }}</h3>
-            <div class="movie-details">
-                <span class="movie-year">📅 {{ movie.year }}</span>
-                <span class="movie-rating">⭐ {{ movie.rating }}/10</span>
-                {% if movie.language %}
-                <span class="movie-language">🗣 {{ movie.language }}</span>
-                {% endif %}
-            </div>
-            <div class="movie-actions">
-                <button class="button add-movie" 
-                        onclick="addMovie({
+    {% if total_results > 0 %}
+        <div class="search-info">
+            <p>Se encontraron {{ total_results }} películas{% if query %} para "{{ query }}"{% endif %}</p>
+        </div>
+    {% endif %}
+
+    <div class="search-results">
+        {% for movie in results %}
+        <div class="movie-card">
+            <img src="{{ movie.medium_cover_image }}" 
+                 alt="{{ movie.title }}" 
+                 class="movie-poster"
+                 loading="lazy">
+            <div class="movie-info">
+                <h3>{{ movie.title_long }}</h3>
+                <div class="movie-details">
+                    <span>📅 {{ movie.year }}</span>
+                    <span>⭐ {{ movie.rating }}/10</span>
+                    {% if movie.language %}
+                    <span>🗣 {{ movie.language }}</span>
+                    {% endif %}
+                </div>
+                <div class="movie-actions">
+                    <button class="add-movie" 
+                            title="Agregar película a la lista"
+                            onclick="addMovie({
                             title: '{{ movie.title_long }}',
                             year: '{{ movie.year }}',
                             rating: '{{ movie.rating }}',
@@ -34,13 +49,51 @@
                             subs: 'https://yifysubtitles.org/movie-imdb/{{ movie.imdb_code }}',
                             imdb_code: '{{ movie.imdb_code }}'
                         })">
-                    Agregar y Descargar
+                    Agregar
                 </button>
             </div>
         </div>
     </div>
     {% endfor %}
-</div>
+    </div>
+
+    {% if total_pages > 1 %}
+    <div class="pagination">
+        {% if page > 1 %}
+            <a href="{{ url_for('search', query=query, page=page-1) }}" class="page-link">← Anterior</a>
+        {% endif %}
+        
+        <div class="page-numbers">
+            {% if page > 2 %}
+                <a href="{{ url_for('search', query=query, page=1) }}" class="page-link">1</a>
+                {% if page > 3 %}
+                    <span class="page-ellipsis">...</span>
+                {% endif %}
+            {% endif %}
+
+            {% if page > 1 %}
+                <a href="{{ url_for('search', query=query, page=page-1) }}" class="page-link">{{ page - 1 }}</a>
+            {% endif %}
+
+            <span class="page-link current">{{ page }}</span>
+
+            {% if page < total_pages %}
+                <a href="{{ url_for('search', query=query, page=page+1) }}" class="page-link">{{ page + 1 }}</a>
+            {% endif %}
+
+            {% if page < total_pages - 1 %}
+                {% if page < total_pages - 2 %}
+                    <span class="page-ellipsis">...</span>
+                {% endif %}
+                <a href="{{ url_for('search', query=query, page=total_pages) }}" class="page-link">{{ total_pages }}</a>
+            {% endif %}
+        </div>
+
+        {% if page < total_pages %}
+            <a href="{{ url_for('search', query=query, page=page+1) }}" class="page-link">Siguiente →</a>
+        {% endif %}
+    </div>
+    {% endif %}
 {% elif query %}
 <div class="empty-state">
     <p class="no-results">No se encontraron resultados para "{{ query }}"</p>

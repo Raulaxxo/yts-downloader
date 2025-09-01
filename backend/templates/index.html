@@ -3,27 +3,27 @@
 {% block title %}YTS Downloader - Películas 1080p{% endblock %}
 
 {% block content %}
-<h1>Mis Películas</h1>
+<h1 class="page-title">Mis Películas</h1>
 
-        <div class="movies-list">
+        <div class="movies-grid">
             {% for movie in movies %}
-            <div class="movie-card" data-id="{{ loop.index0 }}">
+            <div class="movie-card">
                 <div class="movie-info">
-                    <h3>{{ movie.title }}</h3>
-                    <div class="movie-details">
+                    <h3 class="movie-title">{{ movie.movie_title }}</h3>
+                    <div class="movie-meta">
                         {% if movie.year %}
-                        <span class="movie-year">📅 {{ movie.year }}</span>
+                        <span>📅 {{ movie.year }}</span>
                         {% endif %}
                         {% if movie.rating %}
-                        <span class="movie-rating">⭐ {{ movie.rating }}/10</span>
+                        <span>⭐ {{ movie.rating }}/10</span>
+                        {% endif %}
+                        {% if movie.imdb_code %}
+                        <a href="https://www.imdb.com/title/{{ movie.imdb_code }}" target="_blank" class="imdb-link">
+                            🎬 IMDB
+                        </a>
                         {% endif %}
                     </div>
-                    <div class="movie-status status-{{ movie.status }}">
-                        {% if movie.status == 'pendiente' %}⏳
-                        {% elif movie.status == 'descargando' %}📥
-                        {% elif movie.status == 'completado' %}✅
-                        {% elif movie.status == 'error' %}❌
-                        {% endif %}
+                    <div class="status-badge {{ movie.status }}">
                         {{ movie.status }}
                     </div>
                 </div>

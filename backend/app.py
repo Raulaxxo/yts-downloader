@@ -1,7 +1,26 @@
-from flask import Flask, request, render_template, redirect
+from flask import Flask, request, render_template, redirect, url_for, flash, session
+from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager, login_user, login_required, logout_user, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
 import requests
 import urllib.parse
 import json
+import os
+
+# Inicializar extensiones
+db = SQLAlchemy()
+login_manager = LoginManager()
+
+# Inicializar la aplicación
+app = Flask(__name__)
+app.config['SECRET_KEY'] = 'your-secret-key-here'  # Cambiar en producción
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///yts.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Inicializar extensiones con la app
+db.init_app(app)
+login_manager.init_app(app)
+login_manager.login_view = 'login'
 
 # Trackers recomendados
 TRACKERS = [
@@ -23,10 +42,29 @@ def build_magnet(movie):
     return magnet
 
 app = Flask(__name__)
-MOVIES_FILE = "movies.json"
+app.config['SECRET_KEY'] = 'your-secret-key-here'  # Cambiar en producción
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///yts.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Inicializar extensiones con la app
+db.init_app(app)
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+
+# Inicializar modelos
+from models.user_model import User
+UserModel, Download = User.init_model(db)
 
 # Registrar build_magnet en el contexto de Jinja2
 app.jinja_env.globals['build_magnet'] = build_magnet
+
+# Crear las tablas de la base de datos
+with app.app_context():
+    db.create_all()
+
+@login_manager.user_loader
+def load_user(user_id):
+    return UserModel.query.get(int(user_id))
 
 # Transmission configuración (dentro de Docker Compose)
 TRANSMISSION_URL = "http://transmission:9091/transmission/rpc"
@@ -34,6 +72,53 @@ TRANSMISSION_USER = "admin"
 TRANSMISSION_PASS = "1234"
 # También habilitamos el modo debug para ver más detalles
 app.debug = True
+
+# --- Rutas de Autenticación ---
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        user = UserModel.query.filter_by(username=username).first()
+        if user and check_password_hash(user.password, password):
+            login_user(user)
+            flash('¡Inicio de sesión exitoso!', 'success')
+            return redirect(url_for('index'))
+        flash('Usuario o contraseña incorrectos', 'error')
+    return render_template('login.html')
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+        
+        if password != confirm_password:
+            flash('Las contraseñas no coinciden', 'error')
+            return render_template('register.html')
+            
+        if UserModel.query.filter_by(username=username).first():
+            flash('El nombre de usuario ya está en uso', 'error')
+            return render_template('register.html')
+            
+        hashed_password = generate_password_hash(password)
+        new_user = UserModel(username=username, password=hashed_password)
+        db.session.add(new_user)
+        db.session.commit()
+        
+        flash('¡Registro exitoso! Por favor inicia sesión', 'success')
+        return redirect(url_for('login'))
+    return render_template('register.html')
+
+@app.route('/logout')
+@login_required
+def logout():
+    username = current_user.username
+    logout_user()
+    flash(f'¡Hasta pronto, {username}! Has cerrado sesión exitosamente', 'success')
+    return redirect(url_for('login'))
 
 # --- Funciones ---
 def get_transmission_token():
@@ -134,27 +219,69 @@ def get_movie(query):
     return resp["data"]["movies"][0]
 
 @app.route('/')
+@login_required
 def index():
-    """Página principal que muestra la lista de películas"""
-    movies = load_movies()
-    return render_template('index.html', movies=movies)
+    """Página principal que muestra las películas del usuario"""
+    if not session.get('welcomed'):
+        flash(f'¡Bienvenido de nuevo, {current_user.username}!', 'success')
+        session['welcomed'] = True
+    
+    user_downloads = Download.query.filter_by(user_id=current_user.id).order_by(Download.download_date.desc()).all()
+    return render_template('index.html', movies=user_downloads, is_all_movies=False)
+
+@app.route('/all')
+@login_required
+def all_movies():
+    """Muestra todas las películas de todos los usuarios"""
+    movies = Download.query.order_by(Download.download_date.desc()).all()
+    return render_template('all_movies.html', movies=movies)
 
 @app.route('/search')
+@login_required
 def search():
     """Página de búsqueda de películas"""
     query = request.args.get('query', '')
+    page = request.args.get('page', '1')
+    try:
+        page = int(page)
+    except ValueError:
+        page = 1
+    
     results = []
+    total_results = 0
+    
     if query:
         try:
-            url = f"https://yts.mx/api/v2/list_movies.json?query_term={query}&quality=1080p&limit=10"
-            resp = requests.get(url).json()
-            if resp["status"] == "ok" and resp["data"]["movies"]:
-                results = resp["data"]["movies"]
+            url = f"https://yts.mx/api/v2/list_movies.json"
+            params = {
+                "query_term": query,
+                "limit": 24,  # Mostrar más resultados por página
+                "page": page,
+                "sort_by": "year",  # Ordenar por año
+                "order_by": "desc"  # Más recientes primero
+            }
+            
+            resp = requests.get(url, params=params).json()
+            if resp["status"] == "ok":
+                movie_data = resp["data"]
+                if movie_data.get("movies"):
+                    results = movie_data["movies"]
+                    total_results = movie_data.get("movie_count", 0)
         except Exception as e:
             app.logger.error(f"Error en búsqueda: {str(e)}")
-    return render_template('search.html', results=results, query=query)
+            flash('Error al realizar la búsqueda. Por favor, intenta de nuevo.', 'error')
+    
+    return render_template(
+        'search.html',
+        results=results,
+        query=query,
+        page=page,
+        total_results=total_results,
+        total_pages=(total_results + 23) // 24  # Redondear hacia arriba
+    )
 
 @app.route('/add', methods=['POST'])
+@login_required
 def add_movie():
     """Agrega una nueva película a la lista"""
     try:
@@ -162,21 +289,46 @@ def add_movie():
         if not movie_data:
             return {"error": "Datos de película requeridos"}, 400
 
-        required_fields = ['title', 'magnet', 'subs']
+        required_fields = ['title', 'magnet']
         missing_fields = [field for field in required_fields if field not in movie_data]
         if missing_fields:
             return {"error": f"Campos requeridos faltantes: {', '.join(missing_fields)}"}, 400
 
-        # Verificar si la película ya existe
-        movies = load_movies()
-        if any(m['title'] == movie_data['title'] for m in movies):
-            return {"error": "La película ya está en la lista"}, 409
+        # Verificar si la película ya existe para este usuario
+        existing_movie = Download.query.filter_by(
+            user_id=current_user.id,
+            movie_title=movie_data['title']
+        ).first()
+        
+        if existing_movie:
+            return {"error": "Ya has agregado esta película"}, 409
 
-        # Preparar datos
-        movie_info = {
-            'title': movie_data['title'],
-            'magnet': movie_data['magnet'],
-            'subs': movie_data['subs'],
+        # Crear una nueva entrada en la tabla Download
+        new_download = Download(
+            movie_title=movie_data['title'],
+            movie_id=movie_data.get('imdb_code', ''),
+            magnet=movie_data['magnet'],
+            year=movie_data.get('year', ''),
+            rating=movie_data.get('rating', ''),
+            imdb_code=movie_data.get('imdb_code', ''),
+            status='pendiente',
+            user_id=current_user.id
+        )
+        db.session.add(new_download)
+        db.session.commit()
+
+        # Iniciar la descarga en Transmission
+        result = add_to_transmission(movie_data['magnet'])
+        
+        if result:
+            # Actualizar el estado si se agregó correctamente
+            update_movie_status(new_download.id, 'descargando')
+            flash('Película agregada y descarga iniciada', 'success')
+            return {"message": "Película agregada y descarga iniciada"}, 200
+        else:
+            # Si falla la descarga, mantener como pendiente
+            flash('Película agregada pero hubo un error al iniciar la descarga', 'warning')
+            return {"message": "Película agregada pero error al iniciar descarga"}, 200
             'year': movie_data.get('year', ''),
             'rating': movie_data.get('rating', ''),
             'status': 'pendiente',
