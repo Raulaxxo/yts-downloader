@@ -28,18 +28,48 @@ cd yts-downloader
    - Editar los valores en `docker-compose.yml` según necesites
    - Puedes modificar usuarios, contraseñas y puertos
 
-3. Iniciar los servicios:
+3. Crear y configurar las carpetas necesarias:
+```bash
+# Crear carpetas para descargas
+mkdir -p downloads/complete downloads/incomplete
+
+# Establecer permisos (importante para que Transmission funcione)
+sudo chmod -R 777 downloads
+sudo chown -R 1000:1000 downloads
+```
+
+4. Iniciar los servicios:
 ```bash
 docker-compose up -d
 ```
 
 ## Acceso a los servicios
 
-- **Interfaz web**: http://localhost:5000
-- **Transmission**: http://localhost:9091
+- **Interfaz web**: http://localhost:15000
+- **Transmission**: http://localhost:19091
   - Usuario: admin
   - Contraseña: 1234
-- **Plex**: http://localhost:32400/web
+- **Plex**: http://localhost:32401/web
+
+## Solución de problemas
+
+### Permisos de Transmission
+Si ves errores de permisos en los logs de Transmission como:
+```
+stat: cannot statx '/downloads/complete': No such file or directory
+```
+Asegúrate de haber ejecutado los comandos de permisos:
+```bash
+sudo chmod -R 777 downloads
+sudo chown -R 1000:1000 downloads
+```
+
+### Puertos en uso
+Si recibes errores como "ports are not available", asegúrate de que los puertos no estén siendo utilizados por otros servicios. Los puertos utilizados son:
+- 15000 (Backend)
+- 19091 (Transmission)
+- 32401 (Plex)
+- 51413 (Transmission peer)
 
 ## Estructura de directorios
 

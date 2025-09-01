@@ -3,9 +3,6 @@ import requests
 import urllib.parse
 import json
 
-app = Flask(__name__)
-MOVIES_FILE = "movies.json"
-
 # Trackers recomendados
 TRACKERS = [
     "udp://open.demonii.com:1337/announce",
@@ -15,12 +12,78 @@ TRACKERS = [
     "udp://tracker.leechers-paradise.org:6969"
 ]
 
+def build_magnet(movie):
+    """Construye el magnet link usando el primer torrent en 1080p"""
+    torrent = movie["torrents"][0]
+    hash_ = torrent["hash"]
+    name = urllib.parse.quote(movie["title_long"])
+    magnet = f"magnet:?xt=urn:btih:{hash_}&dn={name}"
+    for tr in TRACKERS:
+        magnet += f"&tr={urllib.parse.quote(tr)}"
+    return magnet
+
+app = Flask(__name__)
+MOVIES_FILE = "movies.json"
+
+# Registrar build_magnet en el contexto de Jinja2
+app.jinja_env.globals['build_magnet'] = build_magnet
+
 # Transmission configuración (dentro de Docker Compose)
-TRANSMISSION_URL = "http://transmission:19091/transmission/rpc"
+TRANSMISSION_URL = "http://transmission:9091/transmission/rpc"
 TRANSMISSION_USER = "admin"
 TRANSMISSION_PASS = "1234"
+# También habilitamos el modo debug para ver más detalles
+app.debug = True
 
 # --- Funciones ---
+def get_transmission_token():
+    """Obtiene el token de sesión de Transmission"""
+    try:
+        response = requests.get(TRANSMISSION_URL, auth=(TRANSMISSION_USER, TRANSMISSION_PASS))
+        return response.headers.get('X-Transmission-Session-Id')
+    except Exception as e:
+        app.logger.error(f"Error obteniendo token de Transmission: {str(e)}")
+        return None
+
+def delete_from_transmission(hash_value):
+    """Elimina un torrent de Transmission usando su hash"""
+    try:
+        # Obtener token de sesión
+        token = get_transmission_token()
+        if not token:
+            return False
+
+        # Preparar headers y datos
+        headers = {
+            'X-Transmission-Session-Id': token,
+            'Content-Type': 'application/json'
+        }
+        
+        data = {
+            "method": "torrent-remove",
+            "arguments": {
+                "ids": [hash_value],
+                "delete-local-data": True  # Esto eliminará también los archivos descargados
+            }
+        }
+
+        # Enviar solicitud a Transmission
+        response = requests.post(
+            TRANSMISSION_URL,
+            json=data,
+            headers=headers,
+            auth=(TRANSMISSION_USER, TRANSMISSION_PASS)
+        )
+
+        app.logger.info(f"Respuesta de Transmission al eliminar: Status {response.status_code}")
+        if response.status_code == 200:
+            return True
+        return False
+
+    except Exception as e:
+        app.logger.error(f"Error eliminando torrent de Transmission: {str(e)}")
+        return False
+
 def load_movies():
     try:
         with open(MOVIES_FILE) as f:
@@ -32,6 +95,36 @@ def save_movies(movies):
     with open(MOVIES_FILE, "w") as f:
         json.dump(movies, f, indent=2)
 
+@app.route('/delete/<int:movie_id>', methods=['POST'])
+def delete_movie(movie_id):
+    """Elimina una película de la lista y de Transmission"""
+    try:
+        movies = load_movies()
+        if 0 <= movie_id < len(movies):
+            movie = movies[movie_id]
+            
+            # Si la película está en descarga o completada, la eliminamos de Transmission
+            if movie.get('status') in ['descargando', 'completado']:
+                # Extraer el hash del magnet link
+                magnet = movie.get('magnet', '')
+                hash_match = magnet.split('btih:')[1].split('&')[0] if 'btih:' in magnet else None
+                
+                if hash_match:
+                    app.logger.info(f"Intentando eliminar torrent con hash: {hash_match}")
+                    if not delete_from_transmission(hash_match):
+                        app.logger.warning("No se pudo eliminar el torrent de Transmission")
+                else:
+                    app.logger.warning("No se encontró el hash en el magnet link")
+            
+            # Eliminar de la lista
+            del movies[movie_id]
+            save_movies(movies)
+            return {"message": "Película eliminada"}, 200
+        return {"error": "Película no encontrada"}, 404
+    except Exception as e:
+        app.logger.error(f"Error al eliminar película: {str(e)}")
+        return {"error": "Error interno del servidor"}, 500
+
 def get_movie(query):
     """Busca película en YTS API filtrando 1080p"""
     url = f"https://yts.mx/api/v2/list_movies.json?query_term={query}&quality=1080p&limit=1"
@@ -39,16 +132,6 @@ def get_movie(query):
     if resp["status"] != "ok" or not resp["data"]["movies"]:
         return None
     return resp["data"]["movies"][0]
-
-def build_magnet(movie):
-    """Construye el magnet link usando el primer torrent en 1080p"""
-    torrent = movie["torrents"][0]
-    hash_ = torrent["hash"]
-    name = urllib.parse.quote(movie["title_long"])
-    magnet = f"magnet:?xt=urn:btih:{hash_}&dn={name}"
-    for tr in TRACKERS:
-        magnet += f"&tr={urllib.parse.quote(tr)}"
-    return magnet
 
 @app.route('/')
 def index():
@@ -79,7 +162,11 @@ def add_movie():
         if not movie_data:
             return {"error": "Datos de película requeridos"}, 400
 
-        # Preparar datos de la película
+        required_fields = ['title', 'magnet', 'subs']
+        missing_fields = [field for field in required_fields if field not in movie_data]
+        if missing_fields:
+            return {"error": f"Campos requeridos faltantes: {', '.join(missing_fields)}"}, 400
+
         # Verificar si la película ya existe
         movies = load_movies()
         if any(m['title'] == movie_data['title'] for m in movies):
@@ -92,17 +179,36 @@ def add_movie():
             'subs': movie_data['subs'],
             'year': movie_data.get('year', ''),
             'rating': movie_data.get('rating', ''),
-            'status': 'pendiente'
+            'status': 'pendiente',
+            'imdb_code': movie_data.get('imdb_code', '')
         }
 
-        # Agregar a la lista
+        # Agregar a la lista y guardar
         movies.append(movie_info)
-        save_movies(movies)
+        try:
+            save_movies(movies)
+        except Exception as e:
+            app.logger.error(f"Error al guardar películas: {str(e)}")
+            return {"error": "Error al guardar la película"}, 500
 
-        return {"message": "Película agregada correctamente"}, 200
+        # Intentar iniciar la descarga
+        result = add_to_transmission(movie_info['magnet'])
+        if result is None:
+            return {"message": "Película agregada, pero hubo un error al iniciar la descarga. Intente descargarla más tarde."}, 200
+        
+        movie_info['status'] = 'descargando'
+        try:
+            save_movies(movies)
+        except Exception as e:
+            app.logger.error(f"Error al actualizar estado: {str(e)}")
+            # No devolvemos error porque la película ya está agregada
+            return {"message": "Película agregada y descarga iniciada, pero hubo un error al actualizar el estado"}, 200
+            
+        return {"message": "Película agregada y descarga iniciada"}, 200
+            
     except Exception as e:
         app.logger.error(f"Error al agregar película: {str(e)}")
-        return {"error": "Error interno del servidor"}, 500
+        return {"error": f"Error interno del servidor: {str(e)}"}, 500
 
 @app.errorhandler(404)
 def not_found_error(error):
@@ -111,47 +217,81 @@ def not_found_error(error):
 @app.errorhandler(500)
 def internal_error(error):
     return render_template('error.html', error="Error interno del servidor"), 500
-    return magnet
 
 def add_to_transmission(magnet):
     """Agrega torrent a Transmission vía API"""
-    headers = {"X-Transmission-Session-Id": ""}
-    auth = (TRANSMISSION_USER, TRANSMISSION_PASS)
-
-    # Obtener session-id de Transmission
-    r = requests.post(TRANSMISSION_URL, auth=auth)
-    headers["X-Transmission-Session-Id"] = r.headers.get("X-Transmission-Session-Id", "")
-
-    payload = {"method": "torrent-add", "arguments": {"filename": magnet}}
-    r = requests.post(TRANSMISSION_URL, json=payload, headers=headers, auth=auth)
-    return r.json()
-
-def get_subtitles_link(movie):
-    """Devuelve link a subtítulos de YTS-subs usando IMDb ID"""
-    return f"https://yts-subs.com/movie-imdb/{movie['imdb_code']}"
-
-# --- Rutas ---
-@app.route("/", methods=["GET", "POST"])
-def index():
-    movies = load_movies()
-    if request.method == "POST":
-        name = request.form["name"]
-        movie_data = get_movie(name)
-        if movie_data:
-            magnet = build_magnet(movie_data)
-            add_to_transmission(magnet)
-            subs = get_subtitles_link(movie_data)
-            movies.append({
-                "title": movie_data["title_long"],
-                "magnet": magnet,
-                "subs": subs,
-                "status": "Descargando"
+    try:
+        app.logger.info(f"Intentando agregar torrent: {magnet[:60]}...")
+        session = requests.Session()
+        session.auth = (TRANSMISSION_USER, TRANSMISSION_PASS)
+        
+        # Primera llamada para obtener el token
+        app.logger.info(f"Obteniendo token de Transmission desde {TRANSMISSION_URL}")
+        resp = session.post(TRANSMISSION_URL)
+        app.logger.info(f"Respuesta inicial: Status {resp.status_code}")
+        
+        if resp.status_code == 409:  # Se espera este código cuando falta el token
+            token = resp.headers.get('X-Transmission-Session-Id')
+            app.logger.info(f"Token recibido: {token}")
+            session.headers.update({
+                'X-Transmission-Session-Id': token
             })
         else:
-            movies.append({"title": name, "status": "No encontrado"})
-        save_movies(movies)
-        return redirect("/")
-    return render_template("index.html", movies=movies)
+            app.logger.error(f"Error inesperado al obtener token. Status: {resp.status_code}")
+            return None
+        
+        # Llamada real para agregar el torrent
+        payload = {
+            "method": "torrent-add",
+            "arguments": {
+                "filename": magnet,
+                "download-dir": "/downloads/complete",
+                "paused": False
+            }
+        }
+        
+        app.logger.info("Enviando solicitud para agregar torrent")
+        resp = session.post(TRANSMISSION_URL, json=payload)
+        app.logger.info(f"Respuesta de agregar torrent: Status {resp.status_code}")
+        
+        if resp.status_code != 200:
+            app.logger.error(f"Error al agregar torrent: Status code {resp.status_code}")
+            app.logger.error(f"Respuesta: {resp.text}")
+            return None
+            
+        result = resp.json()
+        app.logger.info(f"Respuesta JSON: {result}")
+        
+        if "result" in result and result["result"] == "success":
+            app.logger.info("Torrent agregado exitosamente")
+            return result
+            
+        app.logger.error(f"Error en respuesta de Transmission: {result}")
+        return None
+    except Exception as e:
+        app.logger.error(f"Error al agregar torrent: {str(e)}")
+        app.logger.error(f"Detalles del error: {repr(e)}")
+        return None
+
+@app.route('/download/<int:movie_id>', methods=['POST'])
+def download_movie(movie_id):
+    """Inicia la descarga de una película en Transmission"""
+    try:
+        movies = load_movies()
+        if 0 <= movie_id < len(movies):
+            movie = movies[movie_id]
+            result = add_to_transmission(movie['magnet'])
+            
+            if result and 'result' in result and result['result'] == 'success':
+                movies[movie_id]['status'] = 'descargando'
+                save_movies(movies)
+                return {"message": "Descarga iniciada"}, 200
+            else:
+                return {"error": "Error al iniciar la descarga"}, 500
+        return {"error": "Película no encontrada"}, 404
+    except Exception as e:
+        app.logger.error(f"Error en descarga: {str(e)}")
+        return {"error": "Error interno del servidor"}, 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)

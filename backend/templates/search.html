@@ -23,11 +23,20 @@
         {% if results %}
         <div class="search-results">
             {% for movie in results %}
-            <div class="movie-card" data-movie='{"title": "{{ movie.title_long }}", "year": "{{ movie.year }}", "rating": "{{ movie.rating }}"}'>
+            <div class="movie-card">
                 <img src="{{ movie.medium_cover_image }}" alt="{{ movie.title }}" class="movie-poster">
                 <div class="movie-info">
                     <h3>{{ movie.title_long }}</h3>
-                    <p>Año: {{ movie.year }} | Rating: {{ movie.rating }}/10</p>
+                    <div class="movie-details">
+                        <span class="movie-year">📅 {{ movie.year }}</span>
+                        <span class="movie-rating">⭐ {{ movie.rating }}/10</span>
+                        {% if movie.language %}
+                        <span class="movie-language">🗣 {{ movie.language }}</span>
+                        {% endif %}
+                    </div>
+                    {% if movie.summary %}
+                    <p class="movie-summary">{{ movie.summary[:200] }}...</p>
+                    {% endif %}
                     <div class="movie-actions">
                         <button class="button add-movie" 
                                 onclick="addMovie({
@@ -35,17 +44,26 @@
                                     year: '{{ movie.year }}',
                                     rating: '{{ movie.rating }}',
                                     magnet: '{{ build_magnet(movie)|safe }}',
-                                    subs: 'https://yifysubtitles.org/movie-imdb/{{ movie.imdb_code }}'
+                                    subs: 'https://yifysubtitles.org/movie-imdb/{{ movie.imdb_code }}',
+                                    imdb_code: '{{ movie.imdb_code }}'
                                 })">
-                            Agregar a Transmission
+                            Agregar y Descargar
                         </button>
+                        <a href="https://www.imdb.com/title/{{ movie.imdb_code }}" 
+                           target="_blank" 
+                           class="button secondary-button">
+                            Ver en IMDb
+                        </a>
                     </div>
                 </div>
             </div>
             {% endfor %}
         </div>
         {% elif query %}
-        <p class="no-results">No se encontraron resultados para "{{ query }}"</p>
+        <div class="empty-state">
+            <p class="no-results">No se encontraron resultados para "{{ query }}"</p>
+            <p class="suggestion">Intenta con otro término de búsqueda</p>
+        </div>
         {% endif %}
     </div>
 
@@ -63,13 +81,14 @@
                 const result = await response.json();
                 
                 if (response.ok) {
-                    alert('Película agregada correctamente');
+                    alert(result.message);
+                    window.location.href = '/'; // Redirigir a la lista de películas
                 } else {
                     alert(result.error || 'Error al agregar la película');
                 }
             } catch (error) {
-                alert('Error al comunicarse con el servidor');
                 console.error('Error:', error);
+                alert('Error al comunicarse con el servidor');
             }
         }
     </script>

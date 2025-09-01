@@ -7,7 +7,7 @@ services:
     ports:
       - "15000:5000"
     volumes:
-      - ./backend/movies.json:/app/movies.json
+      - ./backend:/app
     depends_on:
       - transmission
 
@@ -21,12 +21,16 @@ services:
       - USER=admin
       - PASS=1234
       - PEERPORT=51413
+      - TRANSMISSION_WEB_HOME=/config/web  # Carpeta personalizada para la UI
+      - WATCH_DIR_ENABLED=false         # Deshabilitar directorio watch
     ports:
       - "19091:9091"
       - "51413:51413"
       - "51413:51413/udp"
     volumes:
       - ./downloads:/downloads
+      - ./downloads/complete:/downloads/complete         # Directorio para descargas completadas
+      - ./downloads/incomplete:/downloads/incomplete     # Directorio para descargas en progreso
       - ./transmission_config:/config
     restart: unless-stopped
 
@@ -39,7 +43,7 @@ services:
       - VERSION=latest
       - TZ=America/Santiago
     volumes:
-      - ./downloads:/movies   # Plex lee las descargas
+      - ./downloads/complete:/movies   # Plex lee las descargas completadas
       - ./plex_config:/config
     ports:
       - "32401:32400"

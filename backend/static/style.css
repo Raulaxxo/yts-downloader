@@ -49,6 +49,14 @@ input[type="text"] {
     border: none;
     border-radius: 5px;
     cursor: pointer;
+}
+
+.delete-button {
+    background-color: #e74c3c;
+    margin-left: 10px;
+    font-size: 14px;
+    padding: 5px 10px;
+    cursor: pointer;
     font-size: 16px;
     text-decoration: none;
     transition: background-color 0.3s;
@@ -107,15 +115,107 @@ input[type="text"] {
 .movie-links a {
     color: var(--secondary-color);
     text-decoration: none;
+    padding: 5px 10px;
+    border-radius: 5px;
+    transition: background-color 0.2s;
 }
 
 .movie-links a:hover {
-    text-decoration: underline;
+    background-color: rgba(52, 152, 219, 0.1);
 }
 
 .error-container {
     text-align: center;
     padding: 50px;
+}
+
+.movie-details {
+    display: flex;
+    gap: 15px;
+    margin: 10px 0;
+    color: var(--text-color);
+    font-size: 0.9em;
+}
+
+.movie-year, .movie-rating, .movie-language {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.movie-summary {
+    margin: 10px 0;
+    color: var(--text-color);
+    line-height: 1.4;
+}
+
+.movie-poster {
+    width: 100%;
+    height: 300px;
+    object-fit: cover;
+    border-radius: 5px 5px 0 0;
+}
+
+.secondary-button {
+    background-color: transparent;
+    border: 2px solid var(--secondary-color);
+    color: var(--secondary-color);
+}
+
+.secondary-button:hover {
+    background-color: var(--secondary-color);
+    color: white;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 50px 20px;
+    background-color: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    margin: 20px 0;
+}
+
+.suggestion {
+    color: var(--text-color);
+    margin-top: 10px;
+    font-style: italic;
+}
+
+.download-button {
+    background-color: #27ae60;
+}
+
+.download-button:hover {
+    background-color: #219a52;
+}
+
+/* Estados de las películas */
+.status-pendiente {
+    background-color: #f1c40f;
+    color: #34495e;
+}
+
+.status-descargando {
+    background-color: #3498db;
+    color: white;
+    animation: pulse 2s infinite;
+}
+
+.status-completado {
+    background-color: #27ae60;
+    color: white;
+}
+
+.status-error {
+    background-color: #e74c3c;
+    color: white;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.7; }
+    100% { opacity: 1; }
 }
 
 /* Navegación */
