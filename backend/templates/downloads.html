@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="downloads-container">
+    <h2>Mi Historial de Descargas</h2>
+    {% if downloads %}
+        <div class="downloads-list">
+            {% for download in downloads %}
+            <div class="download-item">
+                <div class="download-info">
+                    <h3>{{ download.movie_title }}</h3>
+                    <span class="download-date">{{ download.download_date.strftime('%d/%m/%Y %H:%M') }}</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="no-downloads">Aún no has descargado ninguna película</p>
+    {% endif %}
+</div>
+{% endblock %}
