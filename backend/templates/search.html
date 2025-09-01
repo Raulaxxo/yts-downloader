@@ -24,9 +24,6 @@
                 <span class="movie-language">🗣 {{ movie.language }}</span>
                 {% endif %}
             </div>
-            {% if movie.summary %}
-            <p class="movie-summary">{{ movie.summary[:200] }}...</p>
-            {% endif %}
             <div class="movie-actions">
                 <button class="button add-movie" 
                         onclick="addMovie({
