@@ -1,6 +1,9 @@
-FROM python:3.9-slim
+FROM python:3.11-slim
 
 WORKDIR /app
+
+# Actualizar pip
+RUN pip install --no-cache-dir --upgrade pip
 
 # Instalar dependencias
 COPY requirements.txt .

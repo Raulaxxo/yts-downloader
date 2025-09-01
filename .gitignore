@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+.env
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Archivos de películas y configuración
+downloads/
+transmission_config/
+plex_config/
+backend/movies.json
+
+# Logs
+*.log
+.transmission-daemon/
+transmission.log.*
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+.directory
+*.swp
+*~
+
+# Docker
+.docker/
+docker-compose.override.yml
+*.env
+
+# Dependencias y caché de Node (por si se agregan herramientas frontend en el futuro)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Archivos temporales
+*.tmp
+*.bak
+*.temp

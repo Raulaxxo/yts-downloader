@@ -5,7 +5,7 @@ services:
     build: ./backend
     container_name: yts_backend
     ports:
-      - "5000:5000"
+      - "15000:5000"
     volumes:
       - ./backend/movies.json:/app/movies.json
     depends_on:
@@ -22,7 +22,7 @@ services:
       - PASS=1234
       - PEERPORT=51413
     ports:
-      - "9091:9091"
+      - "19091:9091"
       - "51413:51413"
       - "51413:51413/udp"
     volumes:
@@ -42,5 +42,5 @@ services:
       - ./downloads:/movies   # Plex lee las descargas
       - ./plex_config:/config
     ports:
-      - "32400:32400"
+      - "32401:32400"
     restart: unless-stopped

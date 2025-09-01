@@ -16,7 +16,7 @@ TRACKERS = [
 ]
 
 # Transmission configuración (dentro de Docker Compose)
-TRANSMISSION_URL = "http://transmission:9091/transmission/rpc"
+TRANSMISSION_URL = "http://transmission:19091/transmission/rpc"
 TRANSMISSION_USER = "admin"
 TRANSMISSION_PASS = "1234"
 
