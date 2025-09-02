@@ -66,10 +66,12 @@ with app.app_context():
 def load_user(user_id):
     return UserModel.query.get(int(user_id))
 
-# Transmission configuración (dentro de Docker Compose)
+# Configuración de Transmission y Plex
 TRANSMISSION_URL = "http://transmission:9091/transmission/rpc"
 TRANSMISSION_USER = "admin"
 TRANSMISSION_PASS = "1234"
+PLEX_URL = "http://plex:32400"
+PLEX_TOKEN = ""  # Se puede configurar después
 
 # --- Funciones auxiliares ---
 def update_movie_status(download_id, new_status):
@@ -83,6 +85,156 @@ def update_movie_status(download_id, new_status):
         return False
     except Exception as e:
         app.logger.error(f"Error al actualizar estado: {str(e)}")
+        return False
+
+def get_transmission_session():
+    """Obtiene una sesión autenticada de Transmission"""
+    try:
+        session = requests.Session()
+        session.auth = (TRANSMISSION_USER, TRANSMISSION_PASS)
+        
+        # Primera llamada para obtener el token
+        resp = session.post(TRANSMISSION_URL)
+        
+        if resp.status_code == 409:
+            token = resp.headers.get('X-Transmission-Session-Id')
+            session.headers.update({
+                'X-Transmission-Session-Id': token
+            })
+            return session
+        else:
+            app.logger.error(f"Error al obtener token de Transmission: {resp.status_code}")
+            return None
+    except Exception as e:
+        app.logger.error(f"Error al conectar con Transmission: {str(e)}")
+        return None
+
+def refresh_plex_library():
+    """Actualiza la biblioteca de Plex"""
+    try:
+        # Si no hay token configurado, intentar sin autenticación (para redes locales)
+        headers = {}
+        if PLEX_TOKEN:
+            headers['X-Plex-Token'] = PLEX_TOKEN
+        
+        # Obtener las secciones de biblioteca
+        sections_url = f"{PLEX_URL}/library/sections"
+        resp = requests.get(sections_url, headers=headers, timeout=10)
+        
+        if resp.status_code != 200:
+            app.logger.warning(f"No se pudo obtener secciones de Plex: {resp.status_code}")
+            return False
+        
+        # Buscar la sección de películas
+        import xml.etree.ElementTree as ET
+        root = ET.fromstring(resp.content)
+        movie_section_id = None
+        
+        for directory in root.findall('.//Directory'):
+            if directory.get('type') == 'movie':
+                movie_section_id = directory.get('key')
+                break
+        
+        if not movie_section_id:
+            app.logger.warning("No se encontró sección de películas en Plex")
+            return False
+        
+        # Actualizar la sección de películas
+        refresh_url = f"{PLEX_URL}/library/sections/{movie_section_id}/refresh"
+        resp = requests.get(refresh_url, headers=headers, timeout=10)
+        
+        if resp.status_code == 200:
+            app.logger.info("Biblioteca de Plex actualizada exitosamente")
+            return True
+        else:
+            app.logger.error(f"Error al actualizar Plex: {resp.status_code}")
+            return False
+            
+    except Exception as e:
+        app.logger.error(f"Error al conectar con Plex: {str(e)}")
+        return False
+
+def check_downloads_status():
+    """Consulta el estado de todas las descargas en Transmission y actualiza la BD"""
+    try:
+        session = get_transmission_session()
+        if not session:
+            return False
+        
+        # Obtener lista de torrents
+        payload = {
+            "method": "torrent-get",
+            "arguments": {
+                "fields": ["id", "name", "status", "percentDone", "error", "errorString"]
+            }
+        }
+        
+        resp = session.post(TRANSMISSION_URL, json=payload)
+        if resp.status_code != 200:
+            app.logger.error(f"Error al obtener torrents: {resp.status_code}")
+            return False
+        
+        result = resp.json()
+        torrents = result.get('arguments', {}).get('torrents', [])
+        
+        # Obtener todas las descargas activas de la BD
+        active_downloads = Download.query.filter(
+            Download.status.in_(['pendiente', 'descargando'])
+        ).all()
+        
+        newly_completed = []  # Lista de películas recién completadas
+        
+        for download in active_downloads:
+            # Buscar el torrent correspondiente por nombre
+            movie_title = download.movie_title.lower()
+            matching_torrent = None
+            
+            for torrent in torrents:
+                torrent_name = torrent.get('name', '').lower()
+                if movie_title in torrent_name or torrent_name in movie_title:
+                    matching_torrent = torrent
+                    break
+            
+            if matching_torrent:
+                torrent_status = matching_torrent.get('status')
+                percent_done = matching_torrent.get('percentDone', 0)
+                error = matching_torrent.get('error')
+                
+                # Estados de Transmission:
+                # 0: Torrent is stopped
+                # 1: Queued to check files
+                # 2: Checking files
+                # 3: Queued to download
+                # 4: Downloading
+                # 5: Queued to seed
+                # 6: Seeding
+                
+                new_status = None
+                if error and error != 0:
+                    new_status = 'error'
+                elif torrent_status in [4] and percent_done < 1.0:  # Descargando
+                    new_status = 'descargando'
+                elif torrent_status in [5, 6] or percent_done >= 1.0:  # Completado
+                    new_status = 'completado'
+                    # Si cambió a completado, agregar a la lista
+                    if download.status != 'completado':
+                        newly_completed.append(download.movie_title)
+                elif torrent_status in [0, 1, 2, 3]:  # Parado o en cola
+                    new_status = 'pendiente'
+                
+                if new_status and new_status != download.status:
+                    app.logger.info(f"Actualizando estado de '{download.movie_title}': {download.status} -> {new_status}")
+                    update_movie_status(download.id, new_status)
+        
+        # Si hay películas recién completadas, actualizar Plex
+        if newly_completed:
+            app.logger.info(f"Películas completadas: {', '.join(newly_completed)}")
+            refresh_plex_library()
+        
+        return True
+        
+    except Exception as e:
+        app.logger.error(f"Error al verificar estados de descarga: {str(e)}")
         return False
 
 # --- Rutas de Autenticación ---
@@ -349,25 +501,11 @@ def add_to_transmission(magnet):
     """Agrega torrent a Transmission vía API"""
     try:
         app.logger.info(f"Intentando agregar torrent: {magnet[:60]}...")
-        session = requests.Session()
-        session.auth = (TRANSMISSION_USER, TRANSMISSION_PASS)
-        
-        # Primera llamada para obtener el token
-        app.logger.info(f"Obteniendo token de Transmission desde {TRANSMISSION_URL}")
-        resp = session.post(TRANSMISSION_URL)
-        app.logger.info(f"Respuesta inicial: Status {resp.status_code}")
-        
-        if resp.status_code == 409:  # Se espera este código cuando falta el token
-            token = resp.headers.get('X-Transmission-Session-Id')
-            app.logger.info(f"Token recibido: {token}")
-            session.headers.update({
-                'X-Transmission-Session-Id': token
-            })
-        else:
-            app.logger.error(f"Error inesperado al obtener token. Status: {resp.status_code}")
+        session = get_transmission_session()
+        if not session:
             return None
         
-        # Llamada real para agregar el torrent
+        # Llamada para agregar el torrent
         payload = {
             "method": "torrent-add",
             "arguments": {
@@ -419,6 +557,138 @@ def download_movie(movie_id):
     except Exception as e:
         app.logger.error(f"Error en descarga: {str(e)}")
         return {"error": "Error interno del servidor"}, 500
+
+@app.route('/api/check-status', methods=['POST'])
+@login_required
+def check_status():
+    """Verifica y actualiza el estado de todas las descargas"""
+    try:
+        success = check_downloads_status()
+        if success:
+            return {"message": "Estados actualizados correctamente"}, 200
+        else:
+            return {"error": "Error al verificar estados"}, 500
+    except Exception as e:
+        app.logger.error(f"Error al verificar estados: {str(e)}")
+        return {"error": "Error interno del servidor"}, 500
+
+@app.route('/api/transmission-status')
+@login_required
+def transmission_status():
+    """Obtiene el estado de conexión con Transmission"""
+    try:
+        session = get_transmission_session()
+        if not session:
+            return {"connected": False, "message": "No se pudo conectar con Transmission"}, 500
+        
+        # Hacer una consulta simple para verificar la conexión
+        payload = {
+            "method": "session-get",
+            "arguments": {}
+        }
+        
+        resp = session.post(TRANSMISSION_URL, json=payload)
+        if resp.status_code == 200:
+            result = resp.json()
+            session_info = result.get('arguments', {})
+            return {
+                "connected": True, 
+                "message": "Conectado correctamente",
+                "version": session_info.get('version', 'Desconocida')
+            }, 200
+        else:
+            return {"connected": False, "message": f"Error de conexión: {resp.status_code}"}, 500
+            
+    except Exception as e:
+        app.logger.error(f"Error al verificar Transmission: {str(e)}")
+        return {"connected": False, "message": f"Error: {str(e)}"}, 500
+
+@app.route('/api/webhook/complete', methods=['POST'])
+def webhook_complete():
+    """Endpoint para el webhook de Transmission cuando se completa una descarga"""
+    try:
+        data = request.get_json()
+        if not data or 'torrent_name' not in data:
+            return {"error": "torrent_name requerido"}, 400
+        
+        torrent_name = data['torrent_name'].lower()
+        app.logger.info(f"Webhook recibido para: {torrent_name}")
+        
+        # Buscar la película en la base de datos por nombre similar
+        all_downloads = Download.query.filter(
+            Download.status.in_(['pendiente', 'descargando'])
+        ).all()
+        
+        movie_found = False
+        for download in all_downloads:
+            movie_title = download.movie_title.lower()
+            
+            # Comparar nombres (buscar coincidencias parciales)
+            if (movie_title in torrent_name or 
+                torrent_name in movie_title or
+                any(word in torrent_name for word in movie_title.split() if len(word) > 3)):
+                
+                # Actualizar estado a completado
+                download.status = 'completado'
+                db.session.commit()
+                
+                app.logger.info(f"Película completada: {download.movie_title}")
+                movie_found = True
+                break
+        
+        if movie_found:
+            return {"message": "Película marcada como completada", "movie_found": True}, 200
+        else:
+            app.logger.warning(f"No se encontró película para torrent: {torrent_name}")
+            return {"message": "Torrent no encontrado en base de datos", "movie_found": False}, 200
+            
+    except Exception as e:
+        app.logger.error(f"Error en webhook: {str(e)}")
+        return {"error": f"Error interno: {str(e)}"}, 500
+
+@app.route('/api/plex-refresh', methods=['POST'])
+@login_required
+def plex_refresh():
+    """Actualiza manualmente la biblioteca de Plex"""
+    try:
+        success = refresh_plex_library()
+        if success:
+            return {"message": "Biblioteca de Plex actualizada correctamente"}, 200
+        else:
+            return {"error": "Error al actualizar la biblioteca de Plex"}, 500
+    except Exception as e:
+        app.logger.error(f"Error al actualizar Plex: {str(e)}")
+        return {"error": "Error interno del servidor"}, 500
+
+@app.route('/api/plex-status')
+@login_required
+def plex_status():
+    """Verifica el estado de conexión con Plex"""
+    try:
+        headers = {}
+        if PLEX_TOKEN:
+            headers['X-Plex-Token'] = PLEX_TOKEN
+        
+        # Hacer una consulta simple para verificar la conexión
+        resp = requests.get(f"{PLEX_URL}/library/sections", headers=headers, timeout=10)
+        
+        if resp.status_code == 200:
+            # Contar secciones de películas
+            import xml.etree.ElementTree as ET
+            root = ET.fromstring(resp.content)
+            movie_sections = [d for d in root.findall('.//Directory') if d.get('type') == 'movie']
+            
+            return {
+                "connected": True,
+                "message": "Conectado correctamente",
+                "movie_sections": len(movie_sections)
+            }, 200
+        else:
+            return {"connected": False, "message": f"Error de conexión: {resp.status_code}"}, 500
+            
+    except Exception as e:
+        app.logger.error(f"Error al verificar Plex: {str(e)}")
+        return {"connected": False, "message": f"Error: {str(e)}"}, 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)

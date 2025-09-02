@@ -1,0 +1,20 @@
+#!/bin/bash
+"""
+Wrapper script para el webhook de Transmission
+Este script se ejecuta cuando termina una descarga
+"""
+
+# Variables de entorno que Transmission pasa automáticamente:
+# TR_APP_VERSION, TR_TIME_LOCALTIME, TR_TORRENT_DIR, TR_TORRENT_HASH, TR_TORRENT_ID, TR_TORRENT_NAME
+
+# Log del evento
+echo "$(date): Descarga completada - $TR_TORRENT_NAME" >> /var/log/transmission-webhook.log
+
+# Ejecutar el script Python en el contenedor del backend
+docker exec yts_backend python3 /app/transmission_webhook.py
+
+# También podemos hacer una llamada HTTP directa como backup
+curl -X POST http://yts_backend:5000/api/webhook/complete \
+  -H "Content-Type: application/json" \
+  -d "{\"torrent_name\": \"$TR_TORRENT_NAME\"}" \
+  >> /var/log/transmission-webhook.log 2>&1

@@ -31,7 +31,9 @@ services:
       - ./downloads:/downloads
       - ./downloads/complete:/downloads/complete         # Directorio para descargas completadas
       - ./downloads/incomplete:/downloads/incomplete     # Directorio para descargas en progreso
+      - ./downloads/movies:/downloads/movies             # Directorio para películas organizadas
       - ./transmission_config:/config
+      - ./transmission-webhook:/usr/local/bin/transmission-webhook:ro  # Script webhook
     restart: unless-stopped
 
   plex:
@@ -43,7 +45,7 @@ services:
       - VERSION=latest
       - TZ=America/Santiago
     volumes:
-      - ./downloads/complete:/movies   # Plex lee las descargas completadas
+      - ./downloads/movies:/movies     # Plex lee las películas organizadas
       - ./plex_config:/config
     ports:
       - "32401:32400"

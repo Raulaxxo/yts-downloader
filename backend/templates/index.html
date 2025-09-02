@@ -1,63 +1,186 @@
 {% extends "base.html" %}
 
-{% block title %}YTS Downloader - Películas 1080p{% endblock %}
+{% block title %}Mis Películas - YTS Downloader{% endblock %}
 
 {% block content %}
-<h1 class="page-title">Mis Películas</h1>
-
-        <div class="movies-grid">
-            {% for movie in movies %}
-            <div class="movie-card">
-                <div class="movie-info">
-                    <h3 class="movie-title">{{ movie.movie_title }}</h3>
-                    <div class="movie-meta">
-                        {% if movie.year %}
-                        <span>📅 {{ movie.year }}</span>
-                        {% endif %}
-                        {% if movie.rating %}
-                        <span>⭐ {{ movie.rating }}/10</span>
-                        {% endif %}
-                        {% if movie.imdb_code %}
-                        <a href="https://www.imdb.com/title/{{ movie.imdb_code }}" target="_blank" class="imdb-link">
-                            🎬 IMDB
-                        </a>
-                        {% endif %}
-                    </div>
-                    <div class="status-badge {{ movie.status }}">
-                        {{ movie.status }}
-                    </div>
-                </div>
-                <div class="movie-actions">
-                    {% if movie.status == 'pendiente' %}
-                    <button class="button download-button" onclick="startDownload({{ loop.index0 }})">
-                        Iniciar Descarga
-                    </button>
-                    {% endif %}
-                    <div class="movie-links">
-                        <a href="{{ movie.magnet }}" class="link" title="Magnet Link">
-                            🧲 Magnet
-                        </a>
-                        <a href="{{ movie.subs }}" target="_blank" class="link" title="Subtítulos">
-                            💬 Subtítulos
-                        </a>
-                        <button class="button delete-button" onclick="deleteMovie({{ loop.index0 }})">
-                            🗑️ Eliminar
-                        </button>
-                    </div>
-                </div>
-            </div>
-            {% else %}
-            <div class="empty-state">
-                <p>No hay películas en tu lista</p>
-                <a href="/search" class="button">Buscar Películas</a>
-            </div>
-            {% endfor %}
+<div class="page-header">
+    <h1 class="page-title">Mis Películas</h1>
+    <div class="page-actions">
+        <button id="checkStatusBtn" class="status-btn">
+            🔄 Actualizar Estados
+        </button>
+        <button id="refreshPlexBtn" class="status-btn plex-btn">
+            📺 Actualizar Plex
+        </button>
+        <div class="status-indicators">
+            <span id="transmissionStatus" class="transmission-status">
+                <span class="status-indicator" id="statusIndicator"></span>
+                <span id="statusText">Verificando conexión...</span>
+            </span>
+            <span id="plexStatus" class="transmission-status">
+                <span class="status-indicator" id="plexIndicator"></span>
+                <span id="plexText">Verificando Plex...</span>
+            </span>
         </div>
     </div>
-{% endblock %}
+</div>
 
-{% block scripts %}
+<div class="movies-grid">
+    {% for movie in movies %}
+    <div class="movie-card">
+        <div class="movie-info">
+            <h3 class="movie-title">{{ movie.movie_title }}</h3>
+            <div class="movie-details">
+                {% if movie.year %}
+                <span>📅 {{ movie.year }}</span>
+                {% endif %}
+                {% if movie.rating %}
+                <span>⭐ {{ movie.rating }}/10</span>
+                {% endif %}
+                {% if movie.imdb_code %}
+                <a href="https://www.imdb.com/title/{{ movie.imdb_code }}" target="_blank" class="imdb-link">
+                    🎬 IMDB
+                </a>
+                {% endif %}
+            </div>
+            <div class="movie-meta">
+                <span class="date-info">📅 {{ movie.download_date.strftime('%d/%m/%Y') }}</span>
+                <span class="status-badge {{ movie.status }}">{{ movie.status }}</span>
+            </div>
+            <div class="movie-actions">
+                {% if movie.status == 'pendiente' %}
+                <button class="action-btn download-btn" onclick="startDownload({{ movie.id }})">
+                    ▶️ Iniciar Descarga
+                </button>
+                {% endif %}
+                <div class="movie-links">
+                    <a href="{{ movie.magnet }}" class="link-btn magnet-btn" title="Magnet Link">
+                        🧲 Magnet
+                    </a>
+                    <button class="action-btn delete-btn" onclick="deleteMovie({{ movie.id }})">
+                        🗑️ Eliminar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <p class="no-results">No hay películas en tu lista</p>
+        <a href="/search" class="empty-action-btn">🔍 Buscar Películas</a>
+    </div>
+    {% endfor %}
+</div>
+
 <script>
+document.addEventListener('DOMContentLoaded', function() {
+    const checkStatusBtn = document.getElementById('checkStatusBtn');
+    const refreshPlexBtn = document.getElementById('refreshPlexBtn');
+    const statusIndicator = document.getElementById('statusIndicator');
+    const statusText = document.getElementById('statusText');
+    const plexIndicator = document.getElementById('plexIndicator');
+    const plexText = document.getElementById('plexText');
+    
+    // Verificar estado de conexión al cargar
+    checkTransmissionConnection();
+    checkPlexConnection();
+    
+    // Botón para actualizar estados
+    checkStatusBtn.addEventListener('click', function() {
+        checkStatusBtn.disabled = true;
+        checkStatusBtn.innerHTML = '🔄 Actualizando...';
+        
+        fetch('/api/check-status', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.message) {
+                alert('Estados actualizados correctamente');
+                location.reload(); // Recargar para mostrar cambios
+            } else {
+                alert('Error al actualizar estados: ' + (data.error || 'Error desconocido'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error al actualizar estados');
+        })
+        .finally(() => {
+            checkStatusBtn.disabled = false;
+            checkStatusBtn.innerHTML = '🔄 Actualizar Estados';
+        });
+    });
+    
+    // Botón para actualizar Plex
+    refreshPlexBtn.addEventListener('click', function() {
+        refreshPlexBtn.disabled = true;
+        refreshPlexBtn.innerHTML = '📺 Actualizando...';
+        
+        fetch('/api/plex-refresh', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.message) {
+                alert('Biblioteca de Plex actualizada correctamente');
+            } else {
+                alert('Error al actualizar Plex: ' + (data.error || 'Error desconocido'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error al actualizar Plex');
+        })
+        .finally(() => {
+            refreshPlexBtn.disabled = false;
+            refreshPlexBtn.innerHTML = '📺 Actualizar Plex';
+        });
+    });
+    
+    function checkTransmissionConnection() {
+        fetch('/api/transmission-status')
+        .then(response => response.json())
+        .then(data => {
+            if (data.connected) {
+                statusIndicator.className = 'status-indicator connected';
+                statusText.textContent = `Transmission ${data.version || 'conectado'}`;
+            } else {
+                statusIndicator.className = 'status-indicator disconnected';
+                statusText.textContent = 'Transmission desconectado';
+            }
+        })
+        .catch(error => {
+            statusIndicator.className = 'status-indicator error';
+            statusText.textContent = 'Error de conexión';
+        });
+    }
+    
+    function checkPlexConnection() {
+        fetch('/api/plex-status')
+        .then(response => response.json())
+        .then(data => {
+            if (data.connected) {
+                plexIndicator.className = 'status-indicator connected';
+                plexText.textContent = `Plex (${data.movie_sections || 0} secciones)`;
+            } else {
+                plexIndicator.className = 'status-indicator disconnected';
+                plexText.textContent = 'Plex desconectado';
+            }
+        })
+        .catch(error => {
+            plexIndicator.className = 'status-indicator error';
+            plexText.textContent = 'Error Plex';
+        });
+    }
+});
+
 async function startDownload(movieId) {
     try {
         const response = await fetch(`/download/${movieId}`, {

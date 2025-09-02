@@ -3,7 +3,18 @@
 {% block title %}Todas las Películas - YTS Downloader{% endblock %}
 
 {% block content %}
-<h1 class="page-title">Todas las Películas</h1>
+<div class="page-header">
+    <h1 class="page-title">Todas las Películas</h1>
+    <div class="page-actions">
+        <button id="checkStatusBtn" class="status-btn">
+            🔄 Actualizar Estados
+        </button>
+        <span id="transmissionStatus" class="transmission-status">
+            <span class="status-indicator" id="statusIndicator"></span>
+            <span id="statusText">Verificando conexión...</span>
+        </span>
+    </div>
+</div>
 
 <div class="movies-grid">
     {% for movie in movies %}
@@ -40,4 +51,63 @@
     <p class="no-results">No hay películas agregadas aún</p>
 </div>
 {% endif %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const checkStatusBtn = document.getElementById('checkStatusBtn');
+    const statusIndicator = document.getElementById('statusIndicator');
+    const statusText = document.getElementById('statusText');
+    
+    // Verificar estado de conexión al cargar
+    checkTransmissionConnection();
+    
+    // Botón para actualizar estados
+    checkStatusBtn.addEventListener('click', function() {
+        checkStatusBtn.disabled = true;
+        checkStatusBtn.innerHTML = '🔄 Actualizando...';
+        
+        fetch('/api/check-status', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.message) {
+                alert('Estados actualizados correctamente');
+                location.reload(); // Recargar para mostrar cambios
+            } else {
+                alert('Error al actualizar estados: ' + (data.error || 'Error desconocido'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error al actualizar estados');
+        })
+        .finally(() => {
+            checkStatusBtn.disabled = false;
+            checkStatusBtn.innerHTML = '🔄 Actualizar Estados';
+        });
+    });
+    
+    function checkTransmissionConnection() {
+        fetch('/api/transmission-status')
+        .then(response => response.json())
+        .then(data => {
+            if (data.connected) {
+                statusIndicator.className = 'status-indicator connected';
+                statusText.textContent = `Transmission ${data.version || 'conectado'}`;
+            } else {
+                statusIndicator.className = 'status-indicator disconnected';
+                statusText.textContent = 'Transmission desconectado';
+            }
+        })
+        .catch(error => {
+            statusIndicator.className = 'status-indicator error';
+            statusText.textContent = 'Error de conexión';
+        });
+    }
+});
+</script>
 {% endblock %}

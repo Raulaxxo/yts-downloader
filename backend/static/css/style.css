@@ -5,6 +5,7 @@
     --border-color: #ddd;
     --primary-color: #007bff;
     --hover-color: #0056b3;
+    --secondary-bg: #f8f9fa;
 }
 
 [data-theme="dark"] {
@@ -14,6 +15,7 @@
     --border-color: #444;
     --primary-color: #0d6efd;
     --hover-color: #0b5ed7;
+    --secondary-bg: #404040;
 }
 
 body {
