@@ -32,6 +32,9 @@
                 <a href="/" class="nav-link {% if request.endpoint == 'index' %}active{% endif %}">Mis Películas</a>
                 <a href="/all" class="nav-link {% if request.endpoint == 'all_movies' %}active{% endif %}">Todas las Películas</a>
                 <a href="/search" class="nav-link {% if request.endpoint == 'search' %}active{% endif %}">Buscar</a>
+                {% if current_user.is_authenticated %}
+                <a href="/listas" class="nav-link {% if request.endpoint == 'movie_lists' or request.endpoint == 'view_movie_list' or request.endpoint == 'new_movie_list' %}active{% endif %}">🎬 Mis Listas</a>
+                {% endif %}
             </div>
             <div class="nav-right">
                 {% if current_user.is_authenticated %}

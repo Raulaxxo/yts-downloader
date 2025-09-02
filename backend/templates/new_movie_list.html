@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+
+{% block title %}Nueva Lista de Películas - YTS Downloader{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">📝 Nueva Lista de Películas</h1>
+    <div class="page-actions">
+        <a href="{{ url_for('movie_lists') }}" class="btn btn-secondary">⬅️ Volver a Mis Listas</a>
+    </div>
+</div>
+
+<div class="form-container">
+    <form id="newListForm" class="list-form">
+        <div class="form-group">
+            <label for="listTitle">Título de la Lista *</label>
+            <input type="text" id="listTitle" name="title" required 
+                   placeholder="Ej: Películas para ver en verano">
+            <small class="form-help">Elige un título descriptivo para tu lista</small>
+        </div>
+        
+        <div class="form-group">
+            <label for="listDescription">Descripción (opcional)</label>
+            <textarea id="listDescription" name="description" rows="4"
+                      placeholder="Describe de qué trata esta lista, qué tipo de películas incluye, cuándo planeas verlas, etc."></textarea>
+            <small class="form-help">Ayuda a otros usuarios a entender el propósito de tu lista</small>
+        </div>
+        
+        <div class="form-group">
+            <label class="checkbox-label">
+                <input type="checkbox" id="isPublic" name="is_public">
+                <span class="checkmark"></span>
+                Hacer pública
+            </label>
+            <small class="form-help">
+                Las listas públicas pueden ser encontradas por otros usuarios. 
+                Las privadas solo son visibles para ti y personas con el enlace de compartir.
+            </small>
+        </div>
+        
+        <div class="form-actions">
+            <button type="button" class="btn btn-secondary" onclick="history.back()">Cancelar</button>
+            <button type="submit" class="btn btn-primary">Crear Lista</button>
+        </div>
+    </form>
+</div>
+
+<div class="tips-section">
+    <h3>💡 Consejos para crear buenas listas</h3>
+    <ul class="tips-list">
+        <li><strong>Sé específico:</strong> "Comedias románticas 2020-2024" es mejor que "Comedias"</li>
+        <li><strong>Agrega contexto:</strong> Explica por qué elegiste esas películas</li>
+        <li><strong>Organiza por tema:</strong> Por género, año, actor, director, o estado de ánimo</li>
+        <li><strong>Actualiza regularmente:</strong> Marca las películas como vistas y agrega nuevas</li>
+        <li><strong>Comparte con amigos:</strong> Usa el enlace de compartir para ver películas juntos</li>
+    </ul>
+</div>
+{% endblock %}
+
+{% block styles %}
+<style>
+.form-container {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+.list-form {
+    background: var(--card-bg);
+    padding: 2rem;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--border-color);
+}
+
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.form-group input,
+.form-group textarea {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--input-bg);
+    color: var(--text-color);
+    font-family: inherit;
+    transition: border-color 0.3s ease;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+}
+
+.form-help {
+    display: block;
+    margin-top: 0.25rem;
+    font-size: 0.85rem;
+    color: var(--secondary-color);
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    font-weight: normal;
+    margin-bottom: 0;
+}
+
+.checkbox-label input[type="checkbox"] {
+    width: auto;
+    margin-right: 0.5rem;
+}
+
+.form-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 2rem;
+}
+
+.tips-section {
+    max-width: 600px;
+    margin: 2rem auto;
+    padding: 1.5rem;
+    background: var(--card-bg);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+}
+
+.tips-section h3 {
+    margin-top: 0;
+    color: var(--text-color);
+}
+
+.tips-list {
+    margin: 1rem 0 0 0;
+    padding-left: 1.5rem;
+}
+
+.tips-list li {
+    margin-bottom: 0.75rem;
+    color: var(--secondary-color);
+    line-height: 1.5;
+}
+
+.tips-list strong {
+    color: var(--text-color);
+}
+
+@media (max-width: 768px) {
+    .form-container {
+        padding: 1rem;
+    }
+    
+    .list-form {
+        padding: 1.5rem;
+    }
+    
+    .form-actions {
+        flex-direction: column;
+    }
+    
+    .tips-section {
+        margin: 1rem;
+    }
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('newListForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const formData = {
+        title: document.getElementById('listTitle').value.trim(),
+        description: document.getElementById('listDescription').value.trim(),
+        is_public: document.getElementById('isPublic').checked
+    };
+    
+    if (!formData.title) {
+        alert('El título es obligatorio');
+        document.getElementById('listTitle').focus();
+        return;
+    }
+    
+    // Mostrar loading
+    const submitBtn = document.querySelector('button[type="submit"]');
+    const originalText = submitBtn.textContent;
+    submitBtn.textContent = 'Creando...';
+    submitBtn.disabled = true;
+    
+    try {
+        const response = await fetch('/lista/nueva', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(formData)
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            alert('Lista creada exitosamente');
+            window.location.href = `/lista/${result.list_id}`;
+        } else {
+            alert(result.error || 'Error al crear la lista');
+            submitBtn.textContent = originalText;
+            submitBtn.disabled = false;
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error al crear la lista');
+        submitBtn.textContent = originalText;
+        submitBtn.disabled = false;
+    }
+});
+
+// Auto-resize textarea
+document.getElementById('listDescription').addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = this.scrollHeight + 'px';
+});
+</script>
+{% endblock %}

@@ -2,6 +2,7 @@ from flask import Flask, request, render_template, redirect, url_for, flash, ses
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from datetime import datetime
 import requests
 import urllib.parse
 import json
@@ -43,7 +44,7 @@ def build_magnet(movie):
 
 # Inicializar modelos
 from models.user_model import User
-UserModel, Download = User.init_model(db)
+UserModel, Download, MovieList, MovieListItem = User.init_model(db)
 
 # Registrar build_magnet en el contexto de Jinja2
 app.jinja_env.globals['build_magnet'] = build_magnet
@@ -695,6 +696,193 @@ def plex_status():
     except Exception as e:
         app.logger.error(f"Error al verificar Plex: {str(e)}")
         return {"connected": False, "message": f"Error: {str(e)}"}, 500
+
+# === RUTAS PARA LISTAS DE PELÍCULAS ===
+
+@app.route('/listas')
+@login_required
+def movie_lists():
+    """Mostrar todas las listas del usuario actual"""
+    user_lists = MovieList.query.filter_by(creator_id=current_user.id).order_by(MovieList.updated_at.desc()).all()
+    return render_template('movie_lists.html', lists=user_lists)
+
+@app.route('/lista/nueva', methods=['GET', 'POST'])
+@login_required
+def new_movie_list():
+    """Crear una nueva lista de películas"""
+    if request.method == 'POST':
+        try:
+            data = request.get_json()
+            title = data.get('title', '').strip()
+            description = data.get('description', '').strip()
+            is_public = data.get('is_public', False)
+            
+            if not title:
+                return {"error": "El título es obligatorio"}, 400
+            
+            # Crear nueva lista
+            new_list = MovieList(
+                title=title,
+                description=description,
+                is_public=is_public,
+                creator_id=current_user.id
+            )
+            
+            db.session.add(new_list)
+            db.session.commit()
+            
+            return {
+                "message": "Lista creada exitosamente",
+                "list_id": new_list.id,
+                "share_code": new_list.share_code
+            }, 201
+            
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error al crear lista: {str(e)}")
+            return {"error": "Error al crear la lista"}, 500
+    
+    return render_template('new_movie_list.html')
+
+@app.route('/lista/<int:list_id>')
+def view_movie_list(list_id):
+    """Ver una lista específica de películas"""
+    movie_list = MovieList.query.get_or_404(list_id)
+    
+    # Verificar permisos
+    if not movie_list.is_public and (not current_user.is_authenticated or movie_list.creator_id != current_user.id):
+        flash('No tienes permisos para ver esta lista', 'error')
+        return redirect(url_for('search'))
+    
+    movies = MovieListItem.query.filter_by(list_id=list_id).order_by(MovieListItem.added_at.desc()).all()
+    is_owner = current_user.is_authenticated and movie_list.creator_id == current_user.id
+    
+    return render_template('view_movie_list.html', 
+                         movie_list=movie_list, 
+                         movies=movies, 
+                         is_owner=is_owner)
+
+@app.route('/lista/compartir/<share_code>')
+def shared_movie_list(share_code):
+    """Ver una lista compartida usando el código de compartir"""
+    movie_list = MovieList.query.filter_by(share_code=share_code).first_or_404()
+    movies = MovieListItem.query.filter_by(list_id=movie_list.id).order_by(MovieListItem.added_at.desc()).all()
+    is_owner = current_user.is_authenticated and movie_list.creator_id == current_user.id
+    
+    return render_template('view_movie_list.html', 
+                         movie_list=movie_list, 
+                         movies=movies, 
+                         is_owner=is_owner,
+                         is_shared_view=True)
+
+@app.route('/lista/<int:list_id>/agregar', methods=['POST'])
+@login_required
+def add_movie_to_list(list_id):
+    """Agregar una película a una lista"""
+    movie_list = MovieList.query.get_or_404(list_id)
+    
+    # Verificar que el usuario sea el creador
+    if movie_list.creator_id != current_user.id:
+        return {"error": "No tienes permisos para modificar esta lista"}, 403
+    
+    try:
+        data = request.get_json()
+        
+        # Verificar que la película no esté ya en la lista
+        existing = MovieListItem.query.filter_by(
+            list_id=list_id,
+            imdb_code=data.get('imdb_code')
+        ).first()
+        
+        if existing:
+            return {"error": "La película ya está en la lista"}, 400
+        
+        # Agregar película a la lista
+        movie_item = MovieListItem(
+            movie_title=data.get('title', ''),
+            year=data.get('year', ''),
+            rating=data.get('rating', ''),
+            imdb_code=data.get('imdb_code', ''),
+            poster_url=data.get('poster_url', ''),
+            notes=data.get('notes', ''),
+            list_id=list_id
+        )
+        
+        db.session.add(movie_item)
+        movie_list.updated_at = datetime.utcnow()
+        db.session.commit()
+        
+        return {"message": "Película agregada a la lista exitosamente"}, 201
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error al agregar película a lista: {str(e)}")
+        return {"error": "Error al agregar la película"}, 500
+
+@app.route('/lista/<int:list_id>/pelicula/<int:movie_id>/toggle-watched', methods=['POST'])
+@login_required
+def toggle_watched(list_id, movie_id):
+    """Marcar/desmarcar película como vista"""
+    movie_list = MovieList.query.get_or_404(list_id)
+    
+    if movie_list.creator_id != current_user.id:
+        return {"error": "No tienes permisos para modificar esta lista"}, 403
+    
+    try:
+        movie_item = MovieListItem.query.filter_by(id=movie_id, list_id=list_id).first_or_404()
+        movie_item.watched = not movie_item.watched
+        movie_list.updated_at = datetime.utcnow()
+        db.session.commit()
+        
+        status = "vista" if movie_item.watched else "no vista"
+        return {"message": f"Película marcada como {status}", "watched": movie_item.watched}, 200
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error al actualizar estado: {str(e)}")
+        return {"error": "Error al actualizar el estado"}, 500
+
+@app.route('/lista/<int:list_id>/pelicula/<int:movie_id>/eliminar', methods=['POST'])
+@login_required
+def remove_from_list(list_id, movie_id):
+    """Eliminar película de una lista"""
+    movie_list = MovieList.query.get_or_404(list_id)
+    
+    if movie_list.creator_id != current_user.id:
+        return {"error": "No tienes permisos para modificar esta lista"}, 403
+    
+    try:
+        movie_item = MovieListItem.query.filter_by(id=movie_id, list_id=list_id).first_or_404()
+        db.session.delete(movie_item)
+        movie_list.updated_at = datetime.utcnow()
+        db.session.commit()
+        
+        return {"message": "Película eliminada de la lista"}, 200
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error al eliminar película: {str(e)}")
+        return {"error": "Error al eliminar la película"}, 500
+
+@app.route('/lista/<int:list_id>/eliminar', methods=['POST'])
+@login_required
+def delete_movie_list(list_id):
+    """Eliminar una lista completa"""
+    movie_list = MovieList.query.get_or_404(list_id)
+    
+    if movie_list.creator_id != current_user.id:
+        return {"error": "No tienes permisos para eliminar esta lista"}, 403
+    
+    try:
+        db.session.delete(movie_list)
+        db.session.commit()
+        
+        return {"message": "Lista eliminada exitosamente"}, 200
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error al eliminar lista: {str(e)}")
+        return {"error": "Error al eliminar la lista"}, 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
