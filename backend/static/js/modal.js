@@ -28,19 +28,25 @@ class CustomModal {
         document.body.appendChild(this.overlay);
         this.container = this.overlay.querySelector('.modal-container');
 
-        // Cerrar al hacer clic en el overlay
+        // Cerrar al hacer clic en el overlay (no en el contenedor)
         this.overlay.addEventListener('click', (e) => {
             if (e.target === this.overlay) {
                 this.close(false);
             }
         });
 
-        // Cerrar con tecla Escape
-        document.addEventListener('keydown', (e) => {
+        // Prevenir cierre al hacer clic en el contenedor
+        this.container.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+
+        // Manejar tecla Escape
+        this.keydownHandler = (e) => {
             if (e.key === 'Escape' && this.isOpen) {
                 this.close(false);
             }
-        });
+        };
+        document.addEventListener('keydown', this.keydownHandler);
     }
 
     // Mostrar modal de alerta
@@ -68,14 +74,34 @@ class CustomModal {
             messageEl.textContent = message;
 
             // Botón OK
-            buttonsEl.innerHTML = `
-                <button class="modal-btn modal-btn-primary" onclick="modal.close(true)">
-                    Entendido
-                </button>
-            `;
+            const okButton = document.createElement('button');
+            okButton.className = 'modal-btn modal-btn-primary';
+            okButton.textContent = 'Entendido';
+            okButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.disableButton(okButton);
+                this.close(true);
+            });
+            
+            buttonsEl.innerHTML = '';
+            buttonsEl.appendChild(okButton);
 
             this.show();
         });
+    }
+
+    // Deshabilitar botón temporalmente para prevenir doble clic
+    disableButton(button) {
+        if (button.disabled) return;
+        button.disabled = true;
+        const originalText = button.textContent;
+        button.textContent = 'Procesando...';
+        setTimeout(() => {
+            if (button) {
+                button.disabled = false;
+                button.textContent = originalText;
+            }
+        }, 1000);
     }
 
     // Mostrar modal de confirmación
@@ -100,14 +126,28 @@ class CustomModal {
             const cancelText = options.cancelText || 'Cancelar';
             const confirmClass = options.dangerous ? 'modal-btn-danger' : 'modal-btn-primary';
 
-            buttonsEl.innerHTML = `
-                <button class="modal-btn modal-btn-secondary" onclick="modal.close(false)">
-                    ${cancelText}
-                </button>
-                <button class="modal-btn ${confirmClass}" onclick="modal.close(true)">
-                    ${confirmText}
-                </button>
-            `;
+            // Crear botones con event listeners
+            const cancelButton = document.createElement('button');
+            cancelButton.className = 'modal-btn modal-btn-secondary';
+            cancelButton.textContent = cancelText;
+            cancelButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.disableButton(cancelButton);
+                this.close(false);
+            });
+
+            const confirmButton = document.createElement('button');
+            confirmButton.className = `modal-btn ${confirmClass}`;
+            confirmButton.textContent = confirmText;
+            confirmButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.disableButton(confirmButton);
+                this.close(true);
+            });
+
+            buttonsEl.innerHTML = '';
+            buttonsEl.appendChild(cancelButton);
+            buttonsEl.appendChild(confirmButton);
 
             this.show();
         });
@@ -138,14 +178,28 @@ class CustomModal {
                               backdrop-filter: blur(10px);">
             `;
 
-            buttonsEl.innerHTML = `
-                <button class="modal-btn modal-btn-secondary" onclick="modal.close(null)">
-                    Cancelar
-                </button>
-                <button class="modal-btn modal-btn-primary" onclick="modal.submitPrompt()">
-                    Aceptar
-                </button>
-            `;
+            // Crear botones con event listeners
+            const cancelButton = document.createElement('button');
+            cancelButton.className = 'modal-btn modal-btn-secondary';
+            cancelButton.textContent = 'Cancelar';
+            cancelButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.disableButton(cancelButton);
+                this.close(null);
+            });
+
+            const acceptButton = document.createElement('button');
+            acceptButton.className = 'modal-btn modal-btn-primary';
+            acceptButton.textContent = 'Aceptar';
+            acceptButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.disableButton(acceptButton);
+                this.submitPrompt();
+            });
+
+            buttonsEl.innerHTML = '';
+            buttonsEl.appendChild(cancelButton);
+            buttonsEl.appendChild(acceptButton);
 
             this.show();
 
@@ -155,6 +209,12 @@ class CustomModal {
                 if (input) {
                     input.focus();
                     input.select();
+                    // También permitir enviar con Enter
+                    input.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter') {
+                            this.submitPrompt();
+                        }
+                    });
                 }
             }, 100);
         });
@@ -188,25 +248,37 @@ class CustomModal {
 
     // Cerrar el modal
     close(result) {
-        if (!this.isOpen) return;
+        if (!this.isOpen || !this.overlay) return;
         
         this.isOpen = false;
         document.body.style.overflow = '';
         
+        // Eliminar event listener de teclado
+        if (this.keydownHandler) {
+            document.removeEventListener('keydown', this.keydownHandler);
+            this.keydownHandler = null;
+        }
+        
         this.overlay.classList.remove('show');
         
         setTimeout(() => {
-            if (this.overlay) {
+            if (this.overlay && this.overlay.parentNode) {
                 this.overlay.remove();
                 this.overlay = null;
                 this.container = null;
             }
+            
+            // Resolver promesa
+            if (this.currentResolve) {
+                const resolve = this.currentResolve;
+                this.currentResolve = null;
+                try {
+                    resolve(result);
+                } catch (error) {
+                    console.error('Error al resolver modal:', error);
+                }
+            }
         }, 300);
-
-        if (this.currentResolve) {
-            this.currentResolve(result);
-            this.currentResolve = null;
-        }
     }
 }
 

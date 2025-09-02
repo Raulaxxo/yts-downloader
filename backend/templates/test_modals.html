@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test de Modales</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        body { 
+            padding: 2rem; 
+            background: #1a1a2e;
+            color: white;
+        }
+        .test-btn {
+            margin: 1rem;
+            padding: 1rem 2rem;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+        .test-btn:hover {
+            background: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Test de Modales</h1>
+    
+    <button class="test-btn" onclick="testAlert()">
+        ✅ Test Alert
+    </button>
+    
+    <button class="test-btn" onclick="testConfirm()">
+        ❓ Test Confirm
+    </button>
+    
+    <button class="test-btn" onclick="testPrompt()">
+        ✏️ Test Prompt
+    </button>
+    
+    <button class="test-btn" onclick="testDangerous()">
+        ⚠️ Test Dangerous
+    </button>
+
+    <div id="result" style="margin-top: 2rem; padding: 1rem; background: rgba(255,255,255,0.1); border-radius: 10px;">
+        <strong>Resultado:</strong> <span id="result-text">Ningún test ejecutado aún</span>
+    </div>
+
+    <script src="/static/js/modal.js"></script>
+    <script>
+        async function testAlert() {
+            await showAlert('Test Alert', 'Este es un mensaje de prueba', 'success');
+            document.getElementById('result-text').textContent = 'Alert completado';
+        }
+
+        async function testConfirm() {
+            const result = await showConfirm('Test Confirm', '¿Estás seguro de hacer esta acción?');
+            document.getElementById('result-text').textContent = `Confirm resultado: ${result}`;
+        }
+
+        async function testPrompt() {
+            const result = await showPrompt('Test Prompt', 'Ingresa tu nombre:', 'Usuario');
+            document.getElementById('result-text').textContent = `Prompt resultado: ${result}`;
+        }
+
+        async function testDangerous() {
+            const result = await showConfirm('Acción Peligrosa', 'Esta acción no se puede deshacer', {
+                dangerous: true,
+                confirmText: 'Eliminar',
+                cancelText: 'Cancelar'
+            });
+            document.getElementById('result-text').textContent = `Dangerous resultado: ${result}`;
+        }
+    </script>
+</body>
+</html>

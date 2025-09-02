@@ -1375,6 +1375,11 @@ def view_profile(user_id):
     
     return render_template('profile.html', user=user, stats=stats, is_friend=is_friend)
 
+@app.route('/test-modals')
+def test_modals():
+    """Página de prueba para modales"""
+    return render_template('test_modals.html')
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
 
