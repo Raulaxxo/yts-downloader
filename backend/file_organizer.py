@@ -26,62 +26,107 @@ class FileOrganizer:
         os.makedirs(self.organized_dir, exist_ok=True)
     
     def clean_movie_name(self, filename):
-        """Limpia el nombre del archivo para que sea más legible"""
+        """Limpia el nombre del archivo: Nombre (Año) [Calidad]"""
         # Remover extensión
         name_without_ext = os.path.splitext(filename)[0]
+        original_name = name_without_ext
         
-        # Patrones a remover (común en torrents)
-        patterns_to_remove = [
-            r'\[.*?\]',  # [YTS.MX], [RARBG], etc.
-            r'\(.*?\)',  # (2023), (1080p), etc. - los mantendremos algunos
-            r'www\..*?\.',  # URLs
-            r'YTS\..*',  # YTS tags
-            r'RARBG',
-            r'x264.*',
-            r'BluRay.*',
-            r'WEBRip.*',
-            r'HDTV.*',
-            r'DVDRip.*',
-            r'BRRip.*',
-            r'\..*',  # Puntos adicionales
-            r'-.*Team',  # Release teams
-            r'PROPER',
-            r'REPACK',
-            r'INTERNAL',
-            r'LIMITED',
-            r'FESTIVAL',
-            r'UNRATED',
-            r'EXTENDED',
-            r'DIRECTORS\.CUT',
+        # Extraer año y calidad ANTES de limpiar
+        year_match = re.search(r'\b(19|20)\d{2}\b', original_name)
+        year = year_match.group() if year_match else ""
+        
+        quality_match = re.search(r'\b(720p|1080p|2160p|4K)\b', original_name, re.IGNORECASE)
+        quality = quality_match.group() if quality_match else ""
+        
+        # Estrategia más inteligente: dividir por patrones conocidos
+        cleaned_name = original_name
+        
+        # Encontrar donde termina el título real (antes de calidad, codec, etc.)
+        cutoff_patterns = [
+            r'\b(720p|1080p|2160p|4K)\b',
+            r'\b(BluRay|WEBRip|HDTV|DVDRip|BRRip)\b',
+            r'\b(x264|x265|H264)\b',
+            r'\b(YTS|RARBG|YIFY)\b',
+            r'-[A-Z]{2,}$',  # Release groups al final
         ]
         
-        cleaned_name = name_without_ext
+        # Encontrar el primer patrón que aparece
+        cut_position = len(cleaned_name)
+        for pattern in cutoff_patterns:
+            match = re.search(pattern, cleaned_name, re.IGNORECASE)
+            if match:
+                cut_position = min(cut_position, match.start())
         
-        # Aplicar limpieza de patrones
-        for pattern in patterns_to_remove:
-            cleaned_name = re.sub(pattern, '', cleaned_name, flags=re.IGNORECASE)
+    def clean_movie_name(self, filename):
+        """Limpia el nombre del archivo: Nombre (Año) [Calidad]"""
+        # Remover extensión
+        name_without_ext = os.path.splitext(filename)[0]
+        original_name = name_without_ext
+        
+        # Extraer año y calidad ANTES de limpiar
+        year_match = re.search(r'\b(19|20)\d{2}\b', original_name)
+        year = year_match.group() if year_match else ""
+        
+        quality_match = re.search(r'\b(720p|1080p|2160p|4K)\b', original_name, re.IGNORECASE)
+        quality = quality_match.group() if quality_match else ""
+        
+        # Estrategia más inteligente: dividir por patrones conocidos
+        cleaned_name = original_name
+        
+        # Encontrar donde termina el título real (antes de calidad, codec, etc.)
+        cutoff_patterns = [
+            r'\[(720p|1080p|2160p|4K)\]',  # Calidad entre corchetes
+            r'\.(720p|1080p|2160p|4K)\.',   # Calidad con puntos
+            r'\b(BluRay|WEBRip|HDTV|DVDRip|BRRip)\b',
+            r'\b(x264|x265|H264)\b',
+            r'\[?(YTS|RARBG|YIFY)\]?',      # Release groups específicos
+            r'-(RARBG|YTS|YIFY|KILLERS|PSA|FXG)$',  # Release groups específicos al final
+        ]
+        
+        # Encontrar el primer patrón que aparece
+        cut_position = len(cleaned_name)
+        for pattern in cutoff_patterns:
+            match = re.search(pattern, cleaned_name, re.IGNORECASE)
+            if match:
+                cut_position = min(cut_position, match.start())
+        
+        # Cortar el nombre en esa posición, pero limpiar espacios al final
+        cleaned_name = cleaned_name[:cut_position].strip()
+        
+        # Limpiar patrones restantes
+        cleaned_name = re.sub(r'\[.*?\]', '', cleaned_name)  # Remover corchetes
+        
+        # Remover paréntesis con año específicamente
+        if year:
+            cleaned_name = re.sub(r'\(' + year + r'\)', '', cleaned_name)
+        
+        # Remover paréntesis restantes
+        cleaned_name = re.sub(r'\(.*?\)', '', cleaned_name)
         
         # Limpiar espacios y caracteres especiales
-        cleaned_name = re.sub(r'[\.\-_]+', ' ', cleaned_name)  # Reemplazar . - _ con espacios
-        cleaned_name = re.sub(r'\s+', ' ', cleaned_name)  # Múltiples espacios a uno
+        cleaned_name = re.sub(r'[\.\-_]+', ' ', cleaned_name)
+        cleaned_name = re.sub(r'\s+', ' ', cleaned_name)
         cleaned_name = cleaned_name.strip()
         
-        # Intentar extraer año si está presente
-        year_match = re.search(r'\b(19|20)\d{2}\b', cleaned_name)
-        year = ""
-        if year_match:
-            year = year_match.group()
-            # Remover el año del nombre principal
-            cleaned_name = re.sub(r'\b(19|20)\d{2}\b', '', cleaned_name).strip()
+        # Si el nombre queda muy corto, usar estrategia conservadora
+        if len(cleaned_name) < 3:
+            # Usar las primeras palabras del nombre original
+            words = original_name.replace('.', ' ').replace('-', ' ').replace('_', ' ').split()
+            # Filtrar palabras que no sean parte del título
+            title_words = []
+            for word in words:
+                if not re.match(r'\b(19|20)\d{2}\b', word) and \
+                   not re.match(r'\b(720p|1080p|2160p|4K)\b', word, re.IGNORECASE) and \
+                   not re.match(r'\b(BluRay|WEBRip|HDTV)\b', word, re.IGNORECASE):
+                    title_words.append(word)
+                if len(title_words) >= 5:  # Máximo 5 palabras
+                    break
+            cleaned_name = ' '.join(title_words)
         
-        # Intentar extraer calidad
-        quality_match = re.search(r'\b(720p|1080p|2160p|4K)\b', name_without_ext, re.IGNORECASE)
-        quality = ""
-        if quality_match:
-            quality = quality_match.group()
+        # Capitalizar correctamente
+        final_name = cleaned_name.title()
         
-        # Formato final: "Nombre Película (Año) [Calidad]"
-        final_name = cleaned_name
+        # Agregar año y calidad
         if year:
             final_name += f" ({year})"
         if quality:
