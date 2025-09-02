@@ -347,26 +347,83 @@ function showMoviePreview(movie) {
 
 async function loadUserLists() {
     try {
-        const response = await fetch('/listas');
+        const response = await fetch('/api/listas');
+        const listsContainer = document.getElementById('userLists');
+        
         if (response.ok) {
-            // Simular carga de listas (necesitaríamos una API endpoint)
-            const listsContainer = document.getElementById('userLists');
-            listsContainer.innerHTML = `
-                <div class="loading">Cargando tus listas...</div>
-            `;
+            const lists = await response.json();
             
-            // Por ahora, mostrar mensaje
-            setTimeout(() => {
+            if (lists.length === 0) {
                 listsContainer.innerHTML = `
                     <p style="text-align: center; color: var(--secondary-color); padding: 1rem;">
-                        📝 Primero necesitas crear una lista<br>
+                        📝 Aún no tienes listas creadas<br>
                         <a href="/listas" style="color: var(--primary-color);">Ir a Mis Listas</a>
                     </p>
                 `;
-            }, 500);
+            } else {
+                listsContainer.innerHTML = lists.map(list => `
+                    <div class="list-option" onclick="addToExistingList(${list.id})" style="
+                        padding: 0.75rem;
+                        border: 1px solid rgba(255,255,255,0.2);
+                        border-radius: 5px;
+                        margin-bottom: 0.5rem;
+                        cursor: pointer;
+                        background: rgba(255,255,255,0.05);
+                        transition: background 0.3s ease;
+                    " onmouseover="this.style.background='rgba(255,255,255,0.1)'" 
+                       onmouseout="this.style.background='rgba(255,255,255,0.05)'">
+                        <strong>${list.title}</strong>
+                        <br>
+                        <small style="color: #999;">
+                            ${list.movie_count} películas • ${list.is_public ? 'Pública' : 'Privada'}
+                        </small>
+                        ${list.description ? `<br><small style="color: #ccc;">${list.description}</small>` : ''}
+                    </div>
+                `).join('');
+            }
+        } else {
+            throw new Error('Error al cargar las listas');
         }
     } catch (error) {
         console.error('Error cargando listas:', error);
+        const listsContainer = document.getElementById('userLists');
+        listsContainer.innerHTML = `
+            <p style="text-align: center; color: var(--danger-color); padding: 1rem;">
+                ❌ Error al cargar las listas
+            </p>
+        `;
+    }
+}
+
+// Agregar película a lista existente
+async function addToExistingList(listId) {
+    try {
+        const movieData = {
+            title: selectedMovie.title,
+            year: selectedMovie.year,
+            rating: selectedMovie.rating,
+            imdb_code: selectedMovie.imdb_code,
+            poster_url: selectedMovie.poster_url,
+            notes: ''
+        };
+        
+        const response = await fetch(`/lista/${listId}/agregar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(movieData)
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            alert('Película agregada a la lista exitosamente');
+            addToListModal.style.display = 'none';
+        } else {
+            alert(result.error || 'Error al agregar la película a la lista');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error al agregar la película a la lista');
     }
 }
 
@@ -395,10 +452,19 @@ document.getElementById('createAndAddBtn').addEventListener('click', async () =>
         
         if (createResponse.ok) {
             // Agregar película a la nueva lista
+            const movieData = {
+                title: selectedMovie.title,
+                year: selectedMovie.year,
+                rating: selectedMovie.rating,
+                imdb_code: selectedMovie.imdb_code,
+                poster_url: selectedMovie.poster_url,
+                notes: ''
+            };
+            
             const addResponse = await fetch(`/lista/${createResult.list_id}/agregar`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(selectedMovie)
+                body: JSON.stringify(movieData)
             });
             
             const addResult = await addResponse.json();

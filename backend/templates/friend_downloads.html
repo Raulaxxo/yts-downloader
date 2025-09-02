@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block title %}Descargas de {{ friend.username }} - YTS Downloader{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/friends.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="page-header">
+        <h1 class="page-title">⬇️ Descargas de {{ friend.username }}</h1>
+        <div class="page-actions">
+            <a href="/amigos" class="btn btn-secondary">← Volver a Amigos</a>
+        </div>
+    </div>
+    
+    {% if downloads %}
+    <div class="downloads-grid">
+        {% for download in downloads %}
+        <div class="movie-card">
+            <div class="movie-info">
+                <h3 class="movie-title">{{ download.movie_title }}</h3>
+                <div class="movie-details">
+                    <span class="movie-year">📅 {{ download.year }}</span>
+                    {% if download.rating %}
+                    <span class="movie-rating">⭐ {{ download.rating }}/10</span>
+                    {% endif %}
+                </div>
+                <div class="download-info">
+                    <span class="download-date">📥 {{ download.download_date.strftime('%d/%m/%Y %H:%M') }}</span>
+                    <span class="download-status">
+                        {% if download.status == 'completed' %}
+                        ✅ Completado
+                        {% elif download.status == 'downloading' %}
+                        ⬇️ Descargando
+                        {% else %}
+                        ⏸️ {{ download.status|title }}
+                        {% endif %}
+                    </span>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <h3>📂 No hay descargas</h3>
+        <p>{{ friend.username }} aún no ha descargado ninguna película.</p>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.downloads-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 1.5rem;
+    margin-top: 2rem;
+}
+
+.movie-card {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+    padding: 1.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: transform 0.3s ease;
+}
+
+.movie-card:hover {
+    transform: translateY(-5px);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.movie-title {
+    color: #fff;
+    margin-bottom: 1rem;
+    font-size: 1.2rem;
+}
+
+.movie-details {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+
+.movie-details span {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 0.3rem 0.8rem;
+    border-radius: 15px;
+    font-size: 0.9rem;
+    color: #ccc;
+}
+
+.download-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.download-date {
+    color: #999;
+    font-size: 0.9rem;
+}
+
+.download-status {
+    color: #4CAF50;
+    font-weight: 500;
+    font-size: 0.9rem;
+}
+
+.empty-state {
+    text-align: center;
+    color: #999;
+    padding: 3rem;
+}
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+</style>
+{% endblock %}

@@ -58,4 +58,16 @@ class User(UserMixin):
             watched = db.Column(db.Boolean, default=False)
             list_id = db.Column(db.Integer, db.ForeignKey('movie_list.id'), nullable=False)
         
-        return UserModel, Download, MovieList, MovieListItem
+        class Friendship(db.Model):
+            __tablename__ = 'friendship'
+            id = db.Column(db.Integer, primary_key=True)
+            requester_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+            addressee_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+            status = db.Column(db.String(20), default='pending')  # pending, accepted, rejected, blocked
+            requested_at = db.Column(db.DateTime, default=datetime.utcnow)
+            responded_at = db.Column(db.DateTime)
+            
+            # Índice único para evitar duplicados
+            __table_args__ = (db.UniqueConstraint('requester_id', 'addressee_id', name='unique_friendship'),)
+        
+        return UserModel, Download, MovieList, MovieListItem, Friendship

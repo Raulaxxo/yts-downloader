@@ -2,6 +2,10 @@
 
 {% block title %}Mis Listas de Películas - YTS Downloader{% endblock %}
 
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/lists.css') }}">
+{% endblock %}
+
 {% block content %}
 <div class="page-header">
     <h1 class="page-title">🎬 Mis Listas de Películas</h1>
@@ -113,107 +117,6 @@
         </div>
     </div>
 </div>
-{% endblock %}
-
-{% block styles %}
-<style>
-.lists-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-    gap: 2rem;
-    padding: 1rem;
-}
-
-.list-card {
-    background: var(--card-bg);
-    border-radius: 12px;
-    padding: 1.5rem;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    border: 1px solid var(--border-color);
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-.list-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-}
-
-.list-header {
-    margin-bottom: 1rem;
-}
-
-.list-title {
-    margin: 0 0 0.5rem 0;
-    color: var(--text-color);
-    font-size: 1.2rem;
-}
-
-.list-meta {
-    display: flex;
-    justify-content: space-between;
-    font-size: 0.85rem;
-}
-
-.movie-count {
-    color: var(--secondary-color);
-}
-
-.visibility.public {
-    color: #28a745;
-}
-
-.visibility.private {
-    color: #6c757d;
-}
-
-.list-description {
-    color: var(--secondary-color);
-    margin-bottom: 1rem;
-    line-height: 1.4;
-}
-
-.list-actions {
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-    margin-bottom: 1rem;
-}
-
-.list-footer {
-    border-top: 1px solid var(--border-color);
-    padding-top: 0.5rem;
-    color: var(--secondary-color);
-    font-size: 0.8rem;
-}
-
-.empty-state {
-    grid-column: 1 / -1;
-    text-align: center;
-    padding: 3rem;
-    color: var(--secondary-color);
-}
-
-.share-link-container {
-    display: flex;
-    gap: 0.5rem;
-    margin: 1rem 0;
-}
-
-.share-link-container input {
-    flex: 1;
-    padding: 0.5rem;
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    background: var(--input-bg);
-    color: var(--text-color);
-}
-
-.share-info {
-    font-size: 0.9rem;
-    color: var(--secondary-color);
-    margin: 0;
-}
-</style>
 {% endblock %}
 
 {% block scripts %}
@@ -329,6 +232,16 @@ document.querySelectorAll('.delete-list-btn').forEach(btn => {
             alert('Error al eliminar la lista');
         }
     });
+});
+
+// Cerrar modal al hacer clic fuera
+window.addEventListener('click', (e) => {
+    if (e.target === newListModal) {
+        newListModal.style.display = 'none';
+    }
+    if (e.target === shareModal) {
+        shareModal.style.display = 'none';
+    }
 });
 </script>
 {% endblock %}

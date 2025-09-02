@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template, redirect, url_for, flash, session
+from flask import Flask, request, render_template, redirect, url_for, flash, session, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -44,7 +44,7 @@ def build_magnet(movie):
 
 # Inicializar modelos
 from models.user_model import User
-UserModel, Download, MovieList, MovieListItem = User.init_model(db)
+UserModel, Download, MovieList, MovieListItem, Friendship = User.init_model(db)
 
 # Registrar build_magnet en el contexto de Jinja2
 app.jinja_env.globals['build_magnet'] = build_magnet
@@ -706,6 +706,29 @@ def movie_lists():
     user_lists = MovieList.query.filter_by(creator_id=current_user.id).order_by(MovieList.updated_at.desc()).all()
     return render_template('movie_lists.html', lists=user_lists)
 
+@app.route('/api/listas')
+@login_required
+def api_movie_lists():
+    """API: Obtener todas las listas del usuario actual en formato JSON"""
+    user_lists = MovieList.query.filter_by(creator_id=current_user.id).order_by(MovieList.updated_at.desc()).all()
+    
+    lists_data = []
+    for movie_list in user_lists:
+        # Contar películas en la lista
+        movie_count = MovieListItem.query.filter_by(list_id=movie_list.id).count()
+        
+        lists_data.append({
+            'id': movie_list.id,
+            'title': movie_list.title,
+            'description': movie_list.description,
+            'is_public': movie_list.is_public,
+            'movie_count': movie_count,
+            'created_at': movie_list.created_at.isoformat(),
+            'updated_at': movie_list.updated_at.isoformat()
+        })
+    
+    return jsonify(lists_data)
+
 @app.route('/lista/nueva', methods=['GET', 'POST'])
 @login_required
 def new_movie_list():
@@ -883,6 +906,232 @@ def delete_movie_list(list_id):
         db.session.rollback()
         app.logger.error(f"Error al eliminar lista: {str(e)}")
         return {"error": "Error al eliminar la lista"}, 500
+
+# === RUTAS DE AMISTAD ===
+
+@app.route('/amigos')
+@login_required
+def friends():
+    """Página principal de amigos"""
+    # Obtener amigos aceptados
+    friends_query = db.session.query(Friendship).filter(
+        ((Friendship.requester_id == current_user.id) | (Friendship.addressee_id == current_user.id)),
+        Friendship.status == 'accepted'
+    ).all()
+    
+    friends_list = []
+    for friendship in friends_query:
+        friend_id = friendship.addressee_id if friendship.requester_id == current_user.id else friendship.requester_id
+        friend = UserModel.query.get(friend_id)
+        if friend:
+            friends_list.append({
+                'id': friend.id,
+                'username': friend.username,
+                'friendship_since': friendship.responded_at or friendship.requested_at
+            })
+    
+    # Obtener solicitudes pendientes recibidas
+    pending_requests = db.session.query(Friendship).filter(
+        Friendship.addressee_id == current_user.id,
+        Friendship.status == 'pending'
+    ).all()
+    
+    pending_list = []
+    for request in pending_requests:
+        requester = UserModel.query.get(request.requester_id)
+        if requester:
+            pending_list.append({
+                'id': request.id,
+                'username': requester.username,
+                'requested_at': request.requested_at
+            })
+    
+    return render_template('friends.html', friends=friends_list, pending_requests=pending_list)
+
+@app.route('/buscar-usuarios')
+@login_required
+def search_users():
+    """Buscar usuarios para agregar como amigos"""
+    query = request.args.get('q', '').strip()
+    
+    if not query:
+        return jsonify([])
+    
+    # Buscar usuarios (excluyendo al usuario actual)
+    users = UserModel.query.filter(
+        UserModel.username.like(f'%{query}%'),
+        UserModel.id != current_user.id
+    ).limit(10).all()
+    
+    results = []
+    for user in users:
+        # Verificar si ya son amigos o hay solicitud pendiente
+        existing = Friendship.query.filter(
+            ((Friendship.requester_id == current_user.id) & (Friendship.addressee_id == user.id)) |
+            ((Friendship.requester_id == user.id) & (Friendship.addressee_id == current_user.id))
+        ).first()
+        
+        status = 'none'
+        if existing:
+            if existing.status == 'accepted':
+                status = 'friends'
+            elif existing.status == 'pending':
+                if existing.requester_id == current_user.id:
+                    status = 'sent'
+                else:
+                    status = 'received'
+            elif existing.status == 'blocked':
+                status = 'blocked'
+        
+        results.append({
+            'id': user.id,
+            'username': user.username,
+            'status': status
+        })
+    
+    return jsonify(results)
+
+@app.route('/solicitud-amistad', methods=['POST'])
+@login_required
+def send_friend_request():
+    """Enviar solicitud de amistad"""
+    data = request.get_json()
+    user_id = data.get('user_id')
+    
+    if not user_id or user_id == current_user.id:
+        return {"error": "Usuario inválido"}, 400
+    
+    # Verificar que el usuario existe
+    target_user = UserModel.query.get(user_id)
+    if not target_user:
+        return {"error": "Usuario no encontrado"}, 404
+    
+    # Verificar si ya existe una relación
+    existing = Friendship.query.filter(
+        ((Friendship.requester_id == current_user.id) & (Friendship.addressee_id == user_id)) |
+        ((Friendship.requester_id == user_id) & (Friendship.addressee_id == current_user.id))
+    ).first()
+    
+    if existing:
+        if existing.status == 'accepted':
+            return {"error": "Ya son amigos"}, 400
+        elif existing.status == 'pending':
+            return {"error": "Ya hay una solicitud pendiente"}, 400
+        elif existing.status == 'blocked':
+            return {"error": "No se puede enviar solicitud"}, 400
+    
+    try:
+        # Crear nueva solicitud
+        friendship = Friendship(
+            requester_id=current_user.id,
+            addressee_id=user_id,
+            status='pending'
+        )
+        db.session.add(friendship)
+        db.session.commit()
+        
+        return {"message": "Solicitud de amistad enviada"}, 201
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error enviando solicitud: {str(e)}")
+        return {"error": "Error al enviar solicitud"}, 500
+
+@app.route('/responder-amistad/<int:request_id>', methods=['POST'])
+@login_required
+def respond_friend_request(request_id):
+    """Responder a solicitud de amistad"""
+    data = request.get_json()
+    action = data.get('action')  # 'accept' o 'reject'
+    
+    if action not in ['accept', 'reject']:
+        return {"error": "Acción inválida"}, 400
+    
+    # Obtener la solicitud
+    friendship = Friendship.query.filter(
+        Friendship.id == request_id,
+        Friendship.addressee_id == current_user.id,
+        Friendship.status == 'pending'
+    ).first()
+    
+    if not friendship:
+        return {"error": "Solicitud no encontrada"}, 404
+    
+    try:
+        friendship.status = 'accepted' if action == 'accept' else 'rejected'
+        friendship.responded_at = datetime.utcnow()
+        db.session.commit()
+        
+        message = "Solicitud aceptada" if action == 'accept' else "Solicitud rechazada"
+        return {"message": message}, 200
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error respondiendo solicitud: {str(e)}")
+        return {"error": "Error al responder solicitud"}, 500
+
+@app.route('/eliminar-amigo/<int:user_id>', methods=['POST'])
+@login_required
+def remove_friend(user_id):
+    """Eliminar amistad"""
+    friendship = Friendship.query.filter(
+        ((Friendship.requester_id == current_user.id) & (Friendship.addressee_id == user_id)) |
+        ((Friendship.requester_id == user_id) & (Friendship.addressee_id == current_user.id)),
+        Friendship.status == 'accepted'
+    ).first()
+    
+    if not friendship:
+        return {"error": "Amistad no encontrada"}, 404
+    
+    try:
+        db.session.delete(friendship)
+        db.session.commit()
+        
+        return {"message": "Amistad eliminada"}, 200
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error eliminando amistad: {str(e)}")
+        return {"error": "Error al eliminar amistad"}, 500
+
+@app.route('/amigo/<int:friend_id>/descargas')
+@login_required
+def friend_downloads(friend_id):
+    """Ver descargas de un amigo"""
+    # Verificar que son amigos
+    friendship = Friendship.query.filter(
+        ((Friendship.requester_id == current_user.id) & (Friendship.addressee_id == friend_id)) |
+        ((Friendship.requester_id == friend_id) & (Friendship.addressee_id == current_user.id)),
+        Friendship.status == 'accepted'
+    ).first()
+    
+    if not friendship:
+        return {"error": "No son amigos"}, 403
+    
+    friend = UserModel.query.get_or_404(friend_id)
+    downloads = Download.query.filter_by(user_id=friend_id).order_by(Download.download_date.desc()).all()
+    
+    return render_template('friend_downloads.html', friend=friend, downloads=downloads)
+
+@app.route('/amigo/<int:friend_id>/listas')
+@login_required
+def friend_lists(friend_id):
+    """Ver listas públicas de un amigo"""
+    # Verificar que son amigos
+    friendship = Friendship.query.filter(
+        ((Friendship.requester_id == current_user.id) & (Friendship.addressee_id == friend_id)) |
+        ((Friendship.requester_id == friend_id) & (Friendship.addressee_id == current_user.id)),
+        Friendship.status == 'accepted'
+    ).first()
+    
+    if not friendship:
+        return {"error": "No son amigos"}, 403
+    
+    friend = UserModel.query.get_or_404(friend_id)
+    # Solo mostrar listas públicas
+    friend_lists = MovieList.query.filter_by(creator_id=friend_id, is_public=True).order_by(MovieList.updated_at.desc()).all()
+    
+    return render_template('friend_lists.html', friend=friend, lists=friend_lists)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
