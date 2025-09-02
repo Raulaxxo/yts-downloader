@@ -41,16 +41,6 @@ def build_magnet(movie):
         magnet += f"&tr={urllib.parse.quote(tr)}"
     return magnet
 
-app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your-secret-key-here'  # Cambiar en producción
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///yts.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-# Inicializar extensiones con la app
-db.init_app(app)
-login_manager.init_app(app)
-login_manager.login_view = 'login'
-
 # Inicializar modelos
 from models.user_model import User
 UserModel, Download = User.init_model(db)
