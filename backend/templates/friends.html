@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+
+{% block title %}Mis Amigos - YTS Downloader{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/friends.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="friends-container">
+    <h1 class="page-title">👥 Mis Amigos</h1>
+    
+    <!-- Buscar usuarios -->
+    <div class="friends-section">
+        <h2 class="section-title">🔍 Buscar Usuarios</h2>
+        <div class="search-section">
+            <div class="search-users">
+                <input type="text" id="searchInput" placeholder="🔍 Buscar usuarios por nombre...">
+                <button type="button" onclick="searchUsers()" class="btn btn-primary">
+                    <span id="searchIcon">🔍</span> Buscar
+                </button>
+            </div>
+            <div id="searchResults" class="search-results"></div>
+        </div>
+    </div>
+    
+    <!-- Solicitudes pendientes -->
+    {% if pending_requests %}
+    <div class="friends-section">
+        <h2 class="section-title">📬 Solicitudes Pendientes</h2>
+        <div class="friends-grid">
+            {% for request in pending_requests %}
+            <div class="user-item" id="request-{{ request.id }}">
+                <div class="user-info">
+                    <div class="user-avatar">{{ request.username[0].upper() }}</div>
+                    <div class="user-details">
+                        <h4>{{ request.username }}</h4>
+                        <p>Solicitud enviada: {{ request.requested_at.strftime('%d/%m/%Y') }}</p>
+                    </div>
+                </div>
+                <div class="friend-actions">
+                    <button class="btn-friend btn-add" onclick="respondRequest({{ request.id }}, 'accept')">
+                        ✅ Aceptar
+                    </button>
+                    <button class="btn-friend btn-remove" onclick="respondRequest({{ request.id }}, 'reject')">
+                        ❌ Rechazar
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Lista de amigos -->
+    <div class="friends-section">
+        <h2 class="section-title">👫 Mis Amigos ({{ friends|length }})</h2>
+        {% if friends %}
+        <div class="friends-grid">
+            {% for friend in friends %}
+            <div class="user-item">
+                <div class="user-info">
+                    <div class="user-avatar">{{ friend.username[0].upper() }}</div>
+                    <div class="user-details">
+                        <h4>{{ friend.username }}</h4>
+                        <p>Amigos desde: {{ friend.friendship_since.strftime('%d/%m/%Y') }}</p>
+                    </div>
+                </div>
+                <div class="friend-actions">
+                    <a href="/amigo/{{ friend.id }}/listas" class="btn-friend btn-view">
+                        📋 Listas
+                    </a>
+                    <a href="/amigo/{{ friend.id }}/descargas" class="btn-friend btn-view">
+                        ⬇️ Descargas
+                    </a>
+                    <button class="btn-friend btn-remove" onclick="removeFriend({{ friend.id }})">
+                        🗑️ Eliminar
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <h3>🤝 ¡Aún no tienes amigos!</h3>
+            <p>Busca usuarios arriba para agregar amigos y compartir tus listas de películas.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/modal.js') }}"></script>
+<script>
+let searchTimeout;
+
+function searchUsers() {
+    const query = document.getElementById('searchInput').value.trim();
+    const searchIcon = document.getElementById('searchIcon');
+    const resultsContainer = document.getElementById('searchResults');
+    
+    if (!query) {
+        resultsContainer.innerHTML = '';
+        return;
+    }
+    
+    // Mostrar loading
+    searchIcon.innerHTML = '<div class="loading-spinner"></div>';
+    resultsContainer.innerHTML = '<div style="text-align: center; padding: 1rem; color: #999;">🔍 Buscando usuarios...</div>';
+    
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(async () => {
+        try {
+            const response = await fetch(`/buscar-usuarios?q=${encodeURIComponent(query)}`);
+            const users = await response.json();
+            searchIcon.innerHTML = '🔍';
+            displaySearchResults(users);
+        } catch (error) {
+            console.error('Error buscando usuarios:', error);
+            searchIcon.innerHTML = '❌';
+            resultsContainer.innerHTML = '<div style="text-align: center; padding: 1rem; color: var(--friends-danger);">❌ Error en la búsqueda</div>';
+        }
+    }, 300);
+}
+
+function displaySearchResults(users) {
+    const resultsContainer = document.getElementById('searchResults');
+    
+    if (users.length === 0) {
+        resultsContainer.innerHTML = `
+            <div class="empty-state" style="margin: 1rem 0; padding: 2rem;">
+                <h4>👤 No se encontraron usuarios</h4>
+                <p>Intenta con otro nombre de usuario</p>
+            </div>
+        `;
+        return;
+    }
+    
+    resultsContainer.innerHTML = users.map(user => `
+        <div class="user-item">
+            <div class="user-info">
+                <div class="user-avatar">${user.username[0].toUpperCase()}</div>
+                <div class="user-details">
+                    <h4>${user.username}</h4>
+                    <p>${getStatusText(user.status)}</p>
+                </div>
+            </div>
+            <div class="friend-actions">
+                ${getActionButton(user)}
+            </div>
+        </div>
+    `).join('');
+}
+
+function getStatusText(status) {
+    switch(status) {
+        case 'friends': return '✅ Ya son amigos';
+        case 'sent': return '⏳ Solicitud enviada';
+        case 'received': return '📬 Te envió solicitud';
+        case 'blocked': return '🚫 Bloqueado';
+        default: return '🆕 Disponible para agregar';
+    }
+}
+
+function getActionButton(user) {
+    switch(user.status) {
+        case 'friends':
+            return '<span class="btn-friend btn-pending">✅ Amigos</span>';
+        case 'sent':
+            return '<span class="btn-friend btn-pending">⏳ Solicitud Enviada</span>';
+        case 'received':
+            return '<span class="btn-friend btn-pending">📬 Revisa tus Solicitudes</span>';
+        case 'blocked':
+            return '<span class="btn-friend btn-remove">🚫 No Disponible</span>';
+        default:
+            return `<button class="btn-friend btn-add" onclick="sendFriendRequest(${user.id})">➕ Agregar Amigo</button>`;
+    }
+}
+
+async function sendFriendRequest(userId) {
+    try {
+        const response = await fetch('/solicitud-amistad', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: userId })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            await showAlert('¡Perfecto!', 'Solicitud de amistad enviada exitosamente', 'success');
+            searchUsers(); // Refresh results
+        } else {
+            await showAlert('Error', result.error || 'Error al enviar solicitud', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        await showAlert('Error', 'Error de conexión al enviar solicitud', 'error');
+    }
+}
+
+async function respondRequest(requestId, action) {
+    try {
+        const response = await fetch(`/responder-amistad/${requestId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: action })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            const actionText = action === 'accept' ? 'aceptada' : 'rechazada';
+            await showAlert('¡Listo!', `Solicitud ${actionText} correctamente`, 'success');
+            document.getElementById(`request-${requestId}`).remove();
+            
+            if (action === 'accept') {
+                location.reload(); // Reload to show new friend
+            }
+        } else {
+            await showAlert('Error', result.error || 'Error al responder solicitud', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        await showAlert('Error', 'Error de conexión al responder solicitud', 'error');
+    }
+}
+
+async function removeFriend(friendId) {
+    const confirmed = await showConfirm(
+        '¿Eliminar amistad?', 
+        '¿Estás seguro de que quieres eliminar esta amistad? Esta acción no se puede deshacer.',
+        { 
+            confirmText: 'Sí, eliminar', 
+            cancelText: 'Cancelar',
+            dangerous: true 
+        }
+    );
+    
+    if (!confirmed) return;
+    
+    try {
+        const response = await fetch(`/eliminar-amigo/${friendId}`, {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            await showAlert('Eliminado', 'Amistad eliminada exitosamente', 'success');
+            location.reload();
+        } else {
+            await showAlert('Error', result.error || 'Error al eliminar amistad', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        await showAlert('Error', 'Error de conexión al eliminar amistad', 'error');
+    }
+}
+
+// Auto-search while typing
+document.getElementById('searchInput').addEventListener('input', searchUsers);
+</script>
+{% endblock %}

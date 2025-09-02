@@ -40,7 +40,7 @@
                 </div>
                 <div class="movie-actions">
                     <button class="add-movie" 
-                            title="Agregar película a la lista"
+                            title="Agregar película a descargas"
                             onclick="addMovie({
                             title: '{{ movie.title_long }}',
                             year: '{{ movie.year }}',
@@ -49,8 +49,19 @@
                             subs: 'https://yifysubtitles.org/movie-imdb/{{ movie.imdb_code }}',
                             imdb_code: '{{ movie.imdb_code }}'
                         })">
-                    Agregar
+                    📥 Descargar
                 </button>
+                {% if current_user.is_authenticated %}
+                <button class="add-to-list-btn" 
+                        title="Agregar a lista"
+                        data-title="{{ movie.title_long }}"
+                        data-year="{{ movie.year }}"
+                        data-rating="{{ movie.rating }}"
+                        data-imdb="{{ movie.imdb_code }}"
+                        data-poster="{{ movie.medium_cover_image }}">
+                    📋 Lista
+                </button>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -100,10 +111,181 @@
     <p class="suggestion">Intenta con otro término de búsqueda</p>
 </div>
 {% endif %}
+
+<!-- Modal para agregar a lista -->
+{% if current_user.is_authenticated %}
+<div id="addToListModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>📋 Agregar a Lista</h3>
+            <span class="close">&times;</span>
+        </div>
+        <div class="modal-body">
+            <div id="movieInfo" class="movie-preview"></div>
+            
+            <div class="list-selection">
+                <h4>Selecciona una lista:</h4>
+                <div id="userLists" class="lists-container">
+                    <!-- Se cargarán las listas por JavaScript -->
+                </div>
+                
+                <div class="quick-create">
+                    <h4>O crear nueva lista:</h4>
+                    <input type="text" id="newListTitle" placeholder="Nombre de la nueva lista">
+                    <button id="createAndAddBtn" class="btn btn-success">Crear y Agregar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block styles %}
+<style>
+.add-to-list-btn {
+    background: #28a745;
+    color: white;
+    border: none;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: background-color 0.3s ease;
+}
+
+.add-to-list-btn:hover {
+    background: #218838;
+}
+
+.movie-preview {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: var(--hover-bg);
+    border-radius: 8px;
+}
+
+.movie-preview img {
+    width: 80px;
+    height: 120px;
+    object-fit: cover;
+    border-radius: 6px;
+}
+
+.movie-preview-info h4 {
+    margin: 0 0 0.5rem 0;
+    color: var(--text-color);
+}
+
+.movie-preview-info p {
+    margin: 0.25rem 0;
+    color: var(--secondary-color);
+    font-size: 0.9rem;
+}
+
+.lists-container {
+    max-height: 200px;
+    overflow-y: auto;
+    margin-bottom: 1rem;
+}
+
+.list-option {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    margin-bottom: 0.5rem;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.list-option:hover {
+    background: var(--hover-bg);
+}
+
+.list-option.selected {
+    background: var(--primary-color);
+    color: white;
+}
+
+.list-option input[type="radio"] {
+    margin-right: 0.5rem;
+}
+
+.quick-create {
+    border-top: 1px solid var(--border-color);
+    padding-top: 1rem;
+}
+
+.quick-create input {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    margin-bottom: 0.5rem;
+    background: var(--input-bg);
+    color: var(--text-color);
+}
+
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+.modal-content {
+    background: var(--card-bg);
+    margin: 5% auto;
+    padding: 0;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 500px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.modal-header h3 {
+    margin: 0;
+    color: var(--text-color);
+}
+
+.close {
+    font-size: 2rem;
+    cursor: pointer;
+    color: var(--secondary-color);
+}
+
+.close:hover {
+    color: var(--text-color);
+}
+
+.modal-body {
+    padding: 1.5rem;
+}
+</style>
 {% endblock %}
 
 {% block scripts %}
 <script>
+// Variables globales
+let selectedMovie = null;
+const addToListModal = document.getElementById('addToListModal');
+
 async function addMovie(movieData) {
     try {
         const response = await fetch('/add', {
@@ -127,5 +309,192 @@ async function addMovie(movieData) {
         alert('Error al comunicarse con el servidor');
     }
 }
+
+// Funcionalidad para agregar a listas
+document.querySelectorAll('.add-to-list-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        selectedMovie = {
+            title: btn.dataset.title,
+            year: btn.dataset.year,
+            rating: btn.dataset.rating,
+            imdb_code: btn.dataset.imdb,
+            poster_url: btn.dataset.poster
+        };
+        
+        // Mostrar información de la película
+        showMoviePreview(selectedMovie);
+        
+        // Cargar listas del usuario
+        await loadUserLists();
+        
+        // Mostrar modal
+        addToListModal.style.display = 'block';
+    });
+});
+
+function showMoviePreview(movie) {
+    const movieInfo = document.getElementById('movieInfo');
+    movieInfo.innerHTML = `
+        <img src="${movie.poster_url}" alt="${movie.title}">
+        <div class="movie-preview-info">
+            <h4>${movie.title}</h4>
+            <p>📅 ${movie.year}</p>
+            <p>⭐ ${movie.rating}/10</p>
+            ${movie.imdb_code ? `<p>🎭 <a href="https://www.imdb.com/title/${movie.imdb_code}" target="_blank">IMDB</a></p>` : ''}
+        </div>
+    `;
+}
+
+async function loadUserLists() {
+    try {
+        const response = await fetch('/api/listas');
+        const listsContainer = document.getElementById('userLists');
+        
+        if (response.ok) {
+            const lists = await response.json();
+            
+            if (lists.length === 0) {
+                listsContainer.innerHTML = `
+                    <p style="text-align: center; color: var(--secondary-color); padding: 1rem;">
+                        📝 Aún no tienes listas creadas<br>
+                        <a href="/listas" style="color: var(--primary-color);">Ir a Mis Listas</a>
+                    </p>
+                `;
+            } else {
+                listsContainer.innerHTML = lists.map(list => `
+                    <div class="list-option" onclick="addToExistingList(${list.id})" style="
+                        padding: 0.75rem;
+                        border: 1px solid rgba(255,255,255,0.2);
+                        border-radius: 5px;
+                        margin-bottom: 0.5rem;
+                        cursor: pointer;
+                        background: rgba(255,255,255,0.05);
+                        transition: background 0.3s ease;
+                    " onmouseover="this.style.background='rgba(255,255,255,0.1)'" 
+                       onmouseout="this.style.background='rgba(255,255,255,0.05)'">
+                        <strong>${list.title}</strong>
+                        <br>
+                        <small style="color: #999;">
+                            ${list.movie_count} películas • ${list.is_public ? 'Pública' : 'Privada'}
+                        </small>
+                        ${list.description ? `<br><small style="color: #ccc;">${list.description}</small>` : ''}
+                    </div>
+                `).join('');
+            }
+        } else {
+            throw new Error('Error al cargar las listas');
+        }
+    } catch (error) {
+        console.error('Error cargando listas:', error);
+        const listsContainer = document.getElementById('userLists');
+        listsContainer.innerHTML = `
+            <p style="text-align: center; color: var(--danger-color); padding: 1rem;">
+                ❌ Error al cargar las listas
+            </p>
+        `;
+    }
+}
+
+// Agregar película a lista existente
+async function addToExistingList(listId) {
+    try {
+        const movieData = {
+            title: selectedMovie.title,
+            year: selectedMovie.year,
+            rating: selectedMovie.rating,
+            imdb_code: selectedMovie.imdb_code,
+            poster_url: selectedMovie.poster_url,
+            notes: ''
+        };
+        
+        const response = await fetch(`/lista/${listId}/agregar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(movieData)
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            alert('Película agregada a la lista exitosamente');
+            addToListModal.style.display = 'none';
+        } else {
+            alert(result.error || 'Error al agregar la película a la lista');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error al agregar la película a la lista');
+    }
+}
+
+// Crear nueva lista y agregar película
+document.getElementById('createAndAddBtn').addEventListener('click', async () => {
+    const listTitle = document.getElementById('newListTitle').value.trim();
+    
+    if (!listTitle) {
+        alert('Por favor escribe un nombre para la lista');
+        return;
+    }
+    
+    try {
+        // Crear lista
+        const createResponse = await fetch('/lista/nueva', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                title: listTitle,
+                description: `Lista creada desde búsqueda - ${new Date().toLocaleDateString()}`,
+                is_public: false
+            })
+        });
+        
+        const createResult = await createResponse.json();
+        
+        if (createResponse.ok) {
+            // Agregar película a la nueva lista
+            const movieData = {
+                title: selectedMovie.title,
+                year: selectedMovie.year,
+                rating: selectedMovie.rating,
+                imdb_code: selectedMovie.imdb_code,
+                poster_url: selectedMovie.poster_url,
+                notes: ''
+            };
+            
+            const addResponse = await fetch(`/lista/${createResult.list_id}/agregar`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(movieData)
+            });
+            
+            const addResult = await addResponse.json();
+            
+            if (addResponse.ok) {
+                alert(`Lista "${listTitle}" creada y película agregada exitosamente`);
+                addToListModal.style.display = 'none';
+                document.getElementById('newListTitle').value = '';
+            } else {
+                alert(addResult.error || 'Error al agregar la película a la lista');
+            }
+        } else {
+            alert(createResult.error || 'Error al crear la lista');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error al crear la lista');
+    }
+});
+
+// Cerrar modal
+document.querySelector('#addToListModal .close').addEventListener('click', () => {
+    addToListModal.style.display = 'none';
+});
+
+// Cerrar modal al hacer clic fuera
+window.addEventListener('click', (e) => {
+    if (e.target === addToListModal) {
+        addToListModal.style.display = 'none';
+    }
+});
 </script>
 {% endblock %}

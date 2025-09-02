@@ -1,0 +1,346 @@
+{% extends "base.html" %}
+
+{% block title %}{{ movie_list.title }} - Lista de Películas{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/lists.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="list-info">
+        <h1 class="page-title">{{ movie_list.title }}</h1>
+        {% if movie_list.description %}
+        <p class="list-description">{{ movie_list.description }}</p>
+        {% endif %}
+        <div class="list-meta">
+            <span class="creator">👤 Por: {{ movie_list.creator.username }}</span>
+            <span class="movie-count">🎬 {{ movies|length }} películas</span>
+            <span class="updated">📅 Actualizada: {{ movie_list.updated_at.strftime('%d/%m/%Y') }}</span>
+            <span class="visibility">
+                {% if movie_list.is_public %}🌐 Pública{% else %}🔒 Privada{% endif %}
+            </span>
+        </div>
+    </div>
+    
+    <div class="page-actions">
+        <a href="{{ url_for('movie_lists') }}" class="btn btn-secondary">⬅️ Mis Listas</a>
+        {% if is_owner %}
+        <button id="addMovieBtn" class="btn btn-primary">➕ Agregar Película</button>
+        {% endif %}
+        {% if not is_shared_view %}
+        <button class="btn btn-success share-btn" data-share-code="{{ movie_list.share_code }}">
+            📤 Compartir
+        </button>
+        {% endif %}
+    </div>
+</div>
+
+<div class="movies-grid">
+    {% if movies %}
+        {% for movie in movies %}
+        <div class="movie-card {% if movie.watched %}watched{% endif %}">
+            {% if movie.poster_url %}
+            <img src="{{ movie.poster_url }}" alt="{{ movie.movie_title }}" class="movie-poster">
+            {% else %}
+            <div class="movie-poster-placeholder">
+                <span>🎬</span>
+            </div>
+            {% endif %}
+            
+            <div class="movie-info">
+                <h3 class="movie-title">{{ movie.movie_title }}</h3>
+                <div class="movie-details">
+                    {% if movie.year %}
+                    <span>📅 {{ movie.year }}</span>
+                    {% endif %}
+                    {% if movie.rating %}
+                    <span>⭐ {{ movie.rating }}/10</span>
+                    {% endif %}
+                    {% if movie.imdb_code %}
+                    <a href="https://www.imdb.com/title/{{ movie.imdb_code }}" target="_blank" class="imdb-link">
+                        🎭 IMDB
+                    </a>
+                    {% endif %}
+                </div>
+                
+                {% if movie.notes %}
+                <p class="movie-notes">💭 {{ movie.notes }}</p>
+                {% endif %}
+                
+                <div class="movie-meta">
+                    <span class="added-date">Agregada: {{ movie.added_at.strftime('%d/%m/%Y') }}</span>
+                    <span class="watched-status">
+                        {% if movie.watched %}✅ Vista{% else %}⏳ Pendiente{% endif %}
+                    </span>
+                </div>
+                
+                {% if is_owner %}
+                <div class="movie-actions">
+                    <button class="btn btn-sm toggle-watched" 
+                            data-movie-id="{{ movie.id }}" 
+                            data-list-id="{{ movie_list.id }}">
+                        {% if movie.watched %}❌ Marcar como no vista{% else %}✅ Marcar como vista{% endif %}
+                    </button>
+                    
+                    {% if movie.imdb_code %}
+                    <button class="btn btn-sm btn-primary add-to-downloads" 
+                            data-imdb="{{ movie.imdb_code }}"
+                            data-title="{{ movie.movie_title }}"
+                            data-year="{{ movie.year }}">
+                        📥 Descargar
+                    </button>
+                    {% endif %}
+                    
+                    <button class="btn btn-sm btn-danger remove-movie" 
+                            data-movie-id="{{ movie.id }}" 
+                            data-list-id="{{ movie_list.id }}">
+                        🗑️ Eliminar
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="empty-state">
+            <h3>📽️ Lista vacía</h3>
+            <p>Esta lista aún no tiene películas</p>
+            {% if is_owner %}
+            <button id="addFirstMovieBtn" class="btn btn-primary">
+                ➕ Agregar Primera Película
+            </button>
+            {% endif %}
+        </div>
+    {% endif %}
+</div>
+
+<!-- Modal para agregar película -->
+{% if is_owner %}
+<div id="addMovieModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>🎬 Agregar Película a la Lista</h3>
+            <span class="close">&times;</span>
+        </div>
+        <div class="modal-body">
+            <div class="search-section">
+                <input type="text" id="movieSearch" placeholder="Buscar película...">
+                <button id="searchBtn" class="btn btn-primary">Buscar</button>
+            </div>
+            
+            <div id="searchResults" class="search-results"></div>
+            
+            <div class="manual-add">
+                <h4>O agregar manualmente:</h4>
+                <form id="manualAddForm">
+                    <div class="form-group">
+                        <label for="manualTitle">Título *</label>
+                        <input type="text" id="manualTitle" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="manualYear">Año</label>
+                            <input type="text" id="manualYear">
+                        </div>
+                        <div class="form-group">
+                            <label for="manualRating">Calificación</label>
+                            <input type="text" id="manualRating">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="manualNotes">Notas</label>
+                        <textarea id="manualNotes" rows="2"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-success">Agregar Película</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Modal para compartir -->
+<div id="shareModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>📤 Compartir Lista</h3>
+            <span class="close">&times;</span>
+        </div>
+        <div class="modal-body">
+            <p>Comparte esta lista con otros usuarios:</p>
+            <div class="share-link-container">
+                <input type="text" id="shareLink" readonly>
+                <button id="copyLinkBtn" class="btn btn-secondary">📋 Copiar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Modales
+const addMovieModal = document.getElementById('addMovieModal');
+const shareModal = document.getElementById('shareModal');
+
+// Abrir modal agregar película
+document.querySelectorAll('#addMovieBtn, #addFirstMovieBtn').forEach(btn => {
+    if (btn) {
+        btn.addEventListener('click', () => {
+            addMovieModal.style.display = 'block';
+        });
+    }
+});
+
+// Cerrar modales
+document.querySelectorAll('.close').forEach(element => {
+    element.addEventListener('click', () => {
+        addMovieModal.style.display = 'none';
+        shareModal.style.display = 'none';
+    });
+});
+
+// Buscar películas
+document.getElementById('searchBtn').addEventListener('click', async () => {
+    const query = document.getElementById('movieSearch').value.trim();
+    if (!query) return;
+    
+    try {
+        const response = await fetch(`/search?query=${encodeURIComponent(query)}`);
+        // Aquí se puede integrar con la búsqueda existente
+        // Por ahora, mostrar mensaje
+        document.getElementById('searchResults').innerHTML = 
+            '<p>Función de búsqueda próximamente. Usa el formulario manual.</p>';
+    } catch (error) {
+        console.error('Error en búsqueda:', error);
+    }
+});
+
+// Agregar película manualmente
+document.getElementById('manualAddForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const movieData = {
+        title: document.getElementById('manualTitle').value.trim(),
+        year: document.getElementById('manualYear').value.trim(),
+        rating: document.getElementById('manualRating').value.trim(),
+        notes: document.getElementById('manualNotes').value.trim(),
+        imdb_code: '',
+        poster_url: ''
+    };
+    
+    if (!movieData.title) {
+        alert('El título es obligatorio');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/lista/{{ movie_list.id }}/agregar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(movieData)
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            alert('Película agregada exitosamente');
+            location.reload();
+        } else {
+            alert(result.error || 'Error al agregar la película');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error al agregar la película');
+    }
+});
+
+// Marcar como vista/no vista
+document.querySelectorAll('.toggle-watched').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        const movieId = btn.dataset.movieId;
+        const listId = btn.dataset.listId;
+        
+        try {
+            const response = await fetch(`/lista/${listId}/pelicula/${movieId}/toggle-watched`, {
+                method: 'POST'
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok) {
+                location.reload();
+            } else {
+                alert(result.error || 'Error al actualizar el estado');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Error al actualizar el estado');
+        }
+    });
+});
+
+// Eliminar película
+document.querySelectorAll('.remove-movie').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        if (!confirm('¿Eliminar esta película de la lista?')) return;
+        
+        const movieId = btn.dataset.movieId;
+        const listId = btn.dataset.listId;
+        
+        try {
+            const response = await fetch(`/lista/${listId}/pelicula/${movieId}/eliminar`, {
+                method: 'POST'
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok) {
+                location.reload();
+            } else {
+                alert(result.error || 'Error al eliminar la película');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Error al eliminar la película');
+        }
+    });
+});
+
+// Compartir lista
+document.querySelector('.share-btn').addEventListener('click', () => {
+    const shareCode = document.querySelector('.share-btn').dataset.shareCode;
+    const shareLink = `${window.location.origin}/lista/compartir/${shareCode}`;
+    
+    document.getElementById('shareLink').value = shareLink;
+    shareModal.style.display = 'block';
+});
+
+// Copiar enlace
+document.getElementById('copyLinkBtn').addEventListener('click', () => {
+    const shareLink = document.getElementById('shareLink');
+    shareLink.select();
+    document.execCommand('copy');
+    
+    const btn = document.getElementById('copyLinkBtn');
+    const originalText = btn.textContent;
+    btn.textContent = '✅ Copiado';
+    setTimeout(() => {
+        btn.textContent = originalText;
+    }, 2000);
+});
+
+// Agregar a descargas
+document.querySelectorAll('.add-to-downloads').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        const imdbCode = btn.dataset.imdb;
+        const title = btn.dataset.title;
+        const year = btn.dataset.year;
+        
+        // Aquí se puede integrar con la función de descarga existente
+        alert(`Función de descarga próximamente para: ${title} (${year})`);
+    });
+});
+</script>
+{% endblock %}

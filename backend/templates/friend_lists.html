@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+
+{% block title %}Listas de {{ friend.username }} - YTS Downloader{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/lists.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/friends.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="page-header">
+        <h1 class="page-title">📋 Listas de {{ friend.username }}</h1>
+        <div class="page-actions">
+            <a href="/amigos" class="btn btn-secondary">← Volver a Amigos</a>
+        </div>
+    </div>
+    
+    {% if lists %}
+    <div class="lists-grid">
+        {% for list in lists %}
+        <div class="list-card">
+            <div class="list-header">
+                <h3 class="list-title">{{ list.title }}</h3>
+                <div class="list-meta">
+                    <span class="movie-count">{{ list.movies|length }} películas</span>
+                    <span class="visibility public">🌐 Pública</span>
+                </div>
+            </div>
+            
+            {% if list.description %}
+            <p class="list-description">{{ list.description }}</p>
+            {% endif %}
+            
+            <div class="list-stats">
+                <span class="stat">
+                    📅 Creada: {{ list.created_at.strftime('%d/%m/%Y') }}
+                </span>
+                <span class="stat">
+                    🔄 Actualizada: {{ list.updated_at.strftime('%d/%m/%Y') }}
+                </span>
+            </div>
+            
+            <div class="list-actions">
+                <a href="/lista/{{ list.id }}" class="btn btn-primary">Ver Lista</a>
+                <button onclick="copyShareLink('{{ list.share_code }}')" class="btn btn-secondary">
+                    📤 Copiar Enlace
+                </button>
+            </div>
+            
+            <!-- Preview de películas -->
+            {% if list.movies %}
+            <div class="movies-preview">
+                <h4>Películas en la lista:</h4>
+                <div class="preview-grid">
+                    {% for movie in list.movies[:4] %}
+                    <div class="movie-preview">
+                        {% if movie.poster_url %}
+                        <img src="{{ movie.poster_url }}" alt="{{ movie.movie_title }}" class="preview-poster">
+                        {% endif %}
+                        <div class="preview-info">
+                            <span class="preview-title">{{ movie.movie_title }}</span>
+                            <span class="preview-year">{{ movie.year }}</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    {% if list.movies|length > 4 %}
+                    <div class="more-movies">
+                        +{{ list.movies|length - 4 }} más
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <h3>📂 No hay listas públicas</h3>
+        <p>{{ friend.username }} aún no ha creado listas públicas para compartir.</p>
+        <p>Las listas privadas no se muestran por privacidad.</p>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.movies-preview {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.movies-preview h4 {
+    color: #ccc;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+}
+
+.preview-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 0.5rem;
+}
+
+.movie-preview {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 5px;
+    padding: 0.5rem;
+    text-align: center;
+}
+
+.preview-poster {
+    width: 100%;
+    max-width: 60px;
+    height: 90px;
+    object-fit: cover;
+    border-radius: 3px;
+    margin-bottom: 0.5rem;
+}
+
+.preview-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.preview-title {
+    color: #fff;
+    font-size: 0.8rem;
+    font-weight: 500;
+    line-height: 1.2;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.preview-year {
+    color: #999;
+    font-size: 0.7rem;
+}
+
+.more-movies {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 5px;
+    color: #ccc;
+    font-size: 0.8rem;
+    font-weight: 500;
+    min-height: 120px;
+}
+
+.empty-state {
+    text-align: center;
+    color: #999;
+    padding: 3rem;
+}
+
+.empty-state h3 {
+    color: #ccc;
+    margin-bottom: 1rem;
+}
+
+.empty-state p {
+    margin-bottom: 0.5rem;
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function copyShareLink(shareCode) {
+    const url = `${window.location.origin}/lista/compartida/${shareCode}`;
+    
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(url).then(() => {
+            alert('Enlace copiado al portapapeles');
+        }).catch(err => {
+            console.error('Error copying to clipboard:', err);
+            fallbackCopy(url);
+        });
+    } else {
+        fallbackCopy(url);
+    }
+}
+
+function fallbackCopy(text) {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    
+    try {
+        document.execCommand('copy');
+        alert('Enlace copiado al portapapeles');
+    } catch (err) {
+        console.error('Fallback copy failed:', err);
+        alert('No se pudo copiar el enlace. URL: ' + text);
+    }
+    
+    document.body.removeChild(textArea);
+}
+</script>
+{% endblock %}

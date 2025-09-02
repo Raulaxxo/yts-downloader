@@ -5,6 +5,8 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/search.css') }}">
+    {% block styles %}{% endblock %}
+    {% block head %}{% endblock %}
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
@@ -32,6 +34,10 @@
                 <a href="/" class="nav-link {% if request.endpoint == 'index' %}active{% endif %}">Mis Películas</a>
                 <a href="/all" class="nav-link {% if request.endpoint == 'all_movies' %}active{% endif %}">Todas las Películas</a>
                 <a href="/search" class="nav-link {% if request.endpoint == 'search' %}active{% endif %}">Buscar</a>
+                {% if current_user.is_authenticated %}
+                <a href="/listas" class="nav-link {% if request.endpoint == 'movie_lists' or request.endpoint == 'view_movie_list' or request.endpoint == 'new_movie_list' %}active{% endif %}">🎬 Mis Listas</a>
+                <a href="/amigos" class="nav-link {% if request.endpoint == 'friends' or request.endpoint == 'friend_downloads' or request.endpoint == 'friend_lists' %}active{% endif %}">👥 Amigos</a>
+                {% endif %}
             </div>
             <div class="nav-right">
                 {% if current_user.is_authenticated %}
@@ -48,6 +54,7 @@
     </div>
 
     <script src="{{ url_for('static', filename='darkMode.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/modal.js') }}"></script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

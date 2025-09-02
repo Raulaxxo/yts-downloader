@@ -1,7 +1,8 @@
-from flask import Flask, request, render_template, redirect, url_for, flash, session
+from flask import Flask, request, render_template, redirect, url_for, flash, session, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from datetime import datetime
 import requests
 import urllib.parse
 import json
@@ -41,19 +42,9 @@ def build_magnet(movie):
         magnet += f"&tr={urllib.parse.quote(tr)}"
     return magnet
 
-app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your-secret-key-here'  # Cambiar en producción
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///yts.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-# Inicializar extensiones con la app
-db.init_app(app)
-login_manager.init_app(app)
-login_manager.login_view = 'login'
-
 # Inicializar modelos
 from models.user_model import User
-UserModel, Download = User.init_model(db)
+UserModel, Download, MovieList, MovieListItem, Friendship = User.init_model(db)
 
 # Registrar build_magnet en el contexto de Jinja2
 app.jinja_env.globals['build_magnet'] = build_magnet
@@ -705,6 +696,442 @@ def plex_status():
     except Exception as e:
         app.logger.error(f"Error al verificar Plex: {str(e)}")
         return {"connected": False, "message": f"Error: {str(e)}"}, 500
+
+# === RUTAS PARA LISTAS DE PELÍCULAS ===
+
+@app.route('/listas')
+@login_required
+def movie_lists():
+    """Mostrar todas las listas del usuario actual"""
+    user_lists = MovieList.query.filter_by(creator_id=current_user.id).order_by(MovieList.updated_at.desc()).all()
+    return render_template('movie_lists.html', lists=user_lists)
+
+@app.route('/api/listas')
+@login_required
+def api_movie_lists():
+    """API: Obtener todas las listas del usuario actual en formato JSON"""
+    user_lists = MovieList.query.filter_by(creator_id=current_user.id).order_by(MovieList.updated_at.desc()).all()
+    
+    lists_data = []
+    for movie_list in user_lists:
+        # Contar películas en la lista
+        movie_count = MovieListItem.query.filter_by(list_id=movie_list.id).count()
+        
+        lists_data.append({
+            'id': movie_list.id,
+            'title': movie_list.title,
+            'description': movie_list.description,
+            'is_public': movie_list.is_public,
+            'movie_count': movie_count,
+            'created_at': movie_list.created_at.isoformat(),
+            'updated_at': movie_list.updated_at.isoformat()
+        })
+    
+    return jsonify(lists_data)
+
+@app.route('/lista/nueva', methods=['GET', 'POST'])
+@login_required
+def new_movie_list():
+    """Crear una nueva lista de películas"""
+    if request.method == 'POST':
+        try:
+            data = request.get_json()
+            title = data.get('title', '').strip()
+            description = data.get('description', '').strip()
+            is_public = data.get('is_public', False)
+            
+            if not title:
+                return {"error": "El título es obligatorio"}, 400
+            
+            # Crear nueva lista
+            new_list = MovieList(
+                title=title,
+                description=description,
+                is_public=is_public,
+                creator_id=current_user.id
+            )
+            
+            db.session.add(new_list)
+            db.session.commit()
+            
+            return {
+                "message": "Lista creada exitosamente",
+                "list_id": new_list.id,
+                "share_code": new_list.share_code
+            }, 201
+            
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error al crear lista: {str(e)}")
+            return {"error": "Error al crear la lista"}, 500
+    
+    return render_template('new_movie_list.html')
+
+@app.route('/lista/<int:list_id>')
+def view_movie_list(list_id):
+    """Ver una lista específica de películas"""
+    movie_list = MovieList.query.get_or_404(list_id)
+    
+    # Verificar permisos
+    if not movie_list.is_public and (not current_user.is_authenticated or movie_list.creator_id != current_user.id):
+        flash('No tienes permisos para ver esta lista', 'error')
+        return redirect(url_for('search'))
+    
+    movies = MovieListItem.query.filter_by(list_id=list_id).order_by(MovieListItem.added_at.desc()).all()
+    is_owner = current_user.is_authenticated and movie_list.creator_id == current_user.id
+    
+    return render_template('view_movie_list.html', 
+                         movie_list=movie_list, 
+                         movies=movies, 
+                         is_owner=is_owner)
+
+@app.route('/lista/compartir/<share_code>')
+def shared_movie_list(share_code):
+    """Ver una lista compartida usando el código de compartir"""
+    movie_list = MovieList.query.filter_by(share_code=share_code).first_or_404()
+    movies = MovieListItem.query.filter_by(list_id=movie_list.id).order_by(MovieListItem.added_at.desc()).all()
+    is_owner = current_user.is_authenticated and movie_list.creator_id == current_user.id
+    
+    return render_template('view_movie_list.html', 
+                         movie_list=movie_list, 
+                         movies=movies, 
+                         is_owner=is_owner,
+                         is_shared_view=True)
+
+@app.route('/lista/<int:list_id>/agregar', methods=['POST'])
+@login_required
+def add_movie_to_list(list_id):
+    """Agregar una película a una lista"""
+    movie_list = MovieList.query.get_or_404(list_id)
+    
+    # Verificar que el usuario sea el creador
+    if movie_list.creator_id != current_user.id:
+        return {"error": "No tienes permisos para modificar esta lista"}, 403
+    
+    try:
+        data = request.get_json()
+        
+        # Verificar que la película no esté ya en la lista
+        existing = MovieListItem.query.filter_by(
+            list_id=list_id,
+            imdb_code=data.get('imdb_code')
+        ).first()
+        
+        if existing:
+            return {"error": "La película ya está en la lista"}, 400
+        
+        # Agregar película a la lista
+        movie_item = MovieListItem(
+            movie_title=data.get('title', ''),
+            year=data.get('year', ''),
+            rating=data.get('rating', ''),
+            imdb_code=data.get('imdb_code', ''),
+            poster_url=data.get('poster_url', ''),
+            notes=data.get('notes', ''),
+            list_id=list_id
+        )
+        
+        db.session.add(movie_item)
+        movie_list.updated_at = datetime.utcnow()
+        db.session.commit()
+        
+        return {"message": "Película agregada a la lista exitosamente"}, 201
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error al agregar película a lista: {str(e)}")
+        return {"error": "Error al agregar la película"}, 500
+
+@app.route('/lista/<int:list_id>/pelicula/<int:movie_id>/toggle-watched', methods=['POST'])
+@login_required
+def toggle_watched(list_id, movie_id):
+    """Marcar/desmarcar película como vista"""
+    movie_list = MovieList.query.get_or_404(list_id)
+    
+    if movie_list.creator_id != current_user.id:
+        return {"error": "No tienes permisos para modificar esta lista"}, 403
+    
+    try:
+        movie_item = MovieListItem.query.filter_by(id=movie_id, list_id=list_id).first_or_404()
+        movie_item.watched = not movie_item.watched
+        movie_list.updated_at = datetime.utcnow()
+        db.session.commit()
+        
+        status = "vista" if movie_item.watched else "no vista"
+        return {"message": f"Película marcada como {status}", "watched": movie_item.watched}, 200
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error al actualizar estado: {str(e)}")
+        return {"error": "Error al actualizar el estado"}, 500
+
+@app.route('/lista/<int:list_id>/pelicula/<int:movie_id>/eliminar', methods=['POST'])
+@login_required
+def remove_from_list(list_id, movie_id):
+    """Eliminar película de una lista"""
+    movie_list = MovieList.query.get_or_404(list_id)
+    
+    if movie_list.creator_id != current_user.id:
+        return {"error": "No tienes permisos para modificar esta lista"}, 403
+    
+    try:
+        movie_item = MovieListItem.query.filter_by(id=movie_id, list_id=list_id).first_or_404()
+        db.session.delete(movie_item)
+        movie_list.updated_at = datetime.utcnow()
+        db.session.commit()
+        
+        return {"message": "Película eliminada de la lista"}, 200
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error al eliminar película: {str(e)}")
+        return {"error": "Error al eliminar la película"}, 500
+
+@app.route('/lista/<int:list_id>/eliminar', methods=['POST'])
+@login_required
+def delete_movie_list(list_id):
+    """Eliminar una lista completa"""
+    movie_list = MovieList.query.get_or_404(list_id)
+    
+    if movie_list.creator_id != current_user.id:
+        return {"error": "No tienes permisos para eliminar esta lista"}, 403
+    
+    try:
+        db.session.delete(movie_list)
+        db.session.commit()
+        
+        return {"message": "Lista eliminada exitosamente"}, 200
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error al eliminar lista: {str(e)}")
+        return {"error": "Error al eliminar la lista"}, 500
+
+# === RUTAS DE AMISTAD ===
+
+@app.route('/amigos')
+@login_required
+def friends():
+    """Página principal de amigos"""
+    # Obtener amigos aceptados
+    friends_query = db.session.query(Friendship).filter(
+        ((Friendship.requester_id == current_user.id) | (Friendship.addressee_id == current_user.id)),
+        Friendship.status == 'accepted'
+    ).all()
+    
+    friends_list = []
+    for friendship in friends_query:
+        friend_id = friendship.addressee_id if friendship.requester_id == current_user.id else friendship.requester_id
+        friend = UserModel.query.get(friend_id)
+        if friend:
+            friends_list.append({
+                'id': friend.id,
+                'username': friend.username,
+                'friendship_since': friendship.responded_at or friendship.requested_at
+            })
+    
+    # Obtener solicitudes pendientes recibidas
+    pending_requests = db.session.query(Friendship).filter(
+        Friendship.addressee_id == current_user.id,
+        Friendship.status == 'pending'
+    ).all()
+    
+    pending_list = []
+    for request in pending_requests:
+        requester = UserModel.query.get(request.requester_id)
+        if requester:
+            pending_list.append({
+                'id': request.id,
+                'username': requester.username,
+                'requested_at': request.requested_at
+            })
+    
+    return render_template('friends.html', friends=friends_list, pending_requests=pending_list)
+
+@app.route('/buscar-usuarios')
+@login_required
+def search_users():
+    """Buscar usuarios para agregar como amigos"""
+    query = request.args.get('q', '').strip()
+    
+    if not query:
+        return jsonify([])
+    
+    # Buscar usuarios (excluyendo al usuario actual)
+    users = UserModel.query.filter(
+        UserModel.username.like(f'%{query}%'),
+        UserModel.id != current_user.id
+    ).limit(10).all()
+    
+    results = []
+    for user in users:
+        # Verificar si ya son amigos o hay solicitud pendiente
+        existing = Friendship.query.filter(
+            ((Friendship.requester_id == current_user.id) & (Friendship.addressee_id == user.id)) |
+            ((Friendship.requester_id == user.id) & (Friendship.addressee_id == current_user.id))
+        ).first()
+        
+        status = 'none'
+        if existing:
+            if existing.status == 'accepted':
+                status = 'friends'
+            elif existing.status == 'pending':
+                if existing.requester_id == current_user.id:
+                    status = 'sent'
+                else:
+                    status = 'received'
+            elif existing.status == 'blocked':
+                status = 'blocked'
+        
+        results.append({
+            'id': user.id,
+            'username': user.username,
+            'status': status
+        })
+    
+    return jsonify(results)
+
+@app.route('/solicitud-amistad', methods=['POST'])
+@login_required
+def send_friend_request():
+    """Enviar solicitud de amistad"""
+    data = request.get_json()
+    user_id = data.get('user_id')
+    
+    if not user_id or user_id == current_user.id:
+        return {"error": "Usuario inválido"}, 400
+    
+    # Verificar que el usuario existe
+    target_user = UserModel.query.get(user_id)
+    if not target_user:
+        return {"error": "Usuario no encontrado"}, 404
+    
+    # Verificar si ya existe una relación
+    existing = Friendship.query.filter(
+        ((Friendship.requester_id == current_user.id) & (Friendship.addressee_id == user_id)) |
+        ((Friendship.requester_id == user_id) & (Friendship.addressee_id == current_user.id))
+    ).first()
+    
+    if existing:
+        if existing.status == 'accepted':
+            return {"error": "Ya son amigos"}, 400
+        elif existing.status == 'pending':
+            return {"error": "Ya hay una solicitud pendiente"}, 400
+        elif existing.status == 'blocked':
+            return {"error": "No se puede enviar solicitud"}, 400
+    
+    try:
+        # Crear nueva solicitud
+        friendship = Friendship(
+            requester_id=current_user.id,
+            addressee_id=user_id,
+            status='pending'
+        )
+        db.session.add(friendship)
+        db.session.commit()
+        
+        return {"message": "Solicitud de amistad enviada"}, 201
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error enviando solicitud: {str(e)}")
+        return {"error": "Error al enviar solicitud"}, 500
+
+@app.route('/responder-amistad/<int:request_id>', methods=['POST'])
+@login_required
+def respond_friend_request(request_id):
+    """Responder a solicitud de amistad"""
+    data = request.get_json()
+    action = data.get('action')  # 'accept' o 'reject'
+    
+    if action not in ['accept', 'reject']:
+        return {"error": "Acción inválida"}, 400
+    
+    # Obtener la solicitud
+    friendship = Friendship.query.filter(
+        Friendship.id == request_id,
+        Friendship.addressee_id == current_user.id,
+        Friendship.status == 'pending'
+    ).first()
+    
+    if not friendship:
+        return {"error": "Solicitud no encontrada"}, 404
+    
+    try:
+        friendship.status = 'accepted' if action == 'accept' else 'rejected'
+        friendship.responded_at = datetime.utcnow()
+        db.session.commit()
+        
+        message = "Solicitud aceptada" if action == 'accept' else "Solicitud rechazada"
+        return {"message": message}, 200
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error respondiendo solicitud: {str(e)}")
+        return {"error": "Error al responder solicitud"}, 500
+
+@app.route('/eliminar-amigo/<int:user_id>', methods=['POST'])
+@login_required
+def remove_friend(user_id):
+    """Eliminar amistad"""
+    friendship = Friendship.query.filter(
+        ((Friendship.requester_id == current_user.id) & (Friendship.addressee_id == user_id)) |
+        ((Friendship.requester_id == user_id) & (Friendship.addressee_id == current_user.id)),
+        Friendship.status == 'accepted'
+    ).first()
+    
+    if not friendship:
+        return {"error": "Amistad no encontrada"}, 404
+    
+    try:
+        db.session.delete(friendship)
+        db.session.commit()
+        
+        return {"message": "Amistad eliminada"}, 200
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error eliminando amistad: {str(e)}")
+        return {"error": "Error al eliminar amistad"}, 500
+
+@app.route('/amigo/<int:friend_id>/descargas')
+@login_required
+def friend_downloads(friend_id):
+    """Ver descargas de un amigo"""
+    # Verificar que son amigos
+    friendship = Friendship.query.filter(
+        ((Friendship.requester_id == current_user.id) & (Friendship.addressee_id == friend_id)) |
+        ((Friendship.requester_id == friend_id) & (Friendship.addressee_id == current_user.id)),
+        Friendship.status == 'accepted'
+    ).first()
+    
+    if not friendship:
+        return {"error": "No son amigos"}, 403
+    
+    friend = UserModel.query.get_or_404(friend_id)
+    downloads = Download.query.filter_by(user_id=friend_id).order_by(Download.download_date.desc()).all()
+    
+    return render_template('friend_downloads.html', friend=friend, downloads=downloads)
+
+@app.route('/amigo/<int:friend_id>/listas')
+@login_required
+def friend_lists(friend_id):
+    """Ver listas públicas de un amigo"""
+    # Verificar que son amigos
+    friendship = Friendship.query.filter(
+        ((Friendship.requester_id == current_user.id) & (Friendship.addressee_id == friend_id)) |
+        ((Friendship.requester_id == friend_id) & (Friendship.addressee_id == current_user.id)),
+        Friendship.status == 'accepted'
+    ).first()
+    
+    if not friendship:
+        return {"error": "No son amigos"}, 403
+    
+    friend = UserModel.query.get_or_404(friend_id)
+    # Solo mostrar listas públicas
+    friend_lists = MovieList.query.filter_by(creator_id=friend_id, is_public=True).order_by(MovieList.updated_at.desc()).all()
+    
+    return render_template('friend_lists.html', friend=friend, lists=friend_lists)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)

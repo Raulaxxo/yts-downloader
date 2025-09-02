@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+
+{% block title %}Mis Listas de Películas - YTS Downloader{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/lists.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">🎬 Mis Listas de Películas</h1>
+    <div class="page-actions">
+        <button id="newListBtn" class="btn btn-primary">
+            ➕ Nueva Lista
+        </button>
+    </div>
+</div>
+
+<div class="lists-grid">
+    {% if lists %}
+        {% for list in lists %}
+        <div class="list-card">
+            <div class="list-header">
+                <h3 class="list-title">{{ list.title }}</h3>
+                <div class="list-meta">
+                    <span class="movie-count">{{ list.movies|length }} películas</span>
+                    <span class="visibility {% if list.is_public %}public{% else %}private{% endif %}">
+                        {% if list.is_public %}🌐 Pública{% else %}🔒 Privada{% endif %}
+                    </span>
+                </div>
+            </div>
+            
+            {% if list.description %}
+            <p class="list-description">{{ list.description }}</p>
+            {% endif %}
+            
+            <div class="list-actions">
+                <a href="{{ url_for('view_movie_list', list_id=list.id) }}" class="btn btn-secondary">Ver Lista</a>
+                <button class="btn btn-success share-btn" data-share-code="{{ list.share_code }}">
+                    📤 Compartir
+                </button>
+                <button class="btn btn-danger delete-list-btn" data-list-id="{{ list.id }}">
+                    🗑️ Eliminar
+                </button>
+            </div>
+            
+            <div class="list-footer">
+                <small>Actualizada: {{ list.updated_at.strftime('%d/%m/%Y') }}</small>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="empty-state">
+            <h3>😴 Aún no tienes listas</h3>
+            <p>Crea tu primera lista para empezar a organizar películas con otros usuarios</p>
+            <button id="createFirstListBtn" class="btn btn-primary">
+                ➕ Crear Mi Primera Lista
+            </button>
+        </div>
+    {% endif %}
+</div>
+
+<!-- Modal para nueva lista -->
+<div id="newListModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>📝 Nueva Lista de Películas</h3>
+            <span class="close">&times;</span>
+        </div>
+        <div class="modal-body">
+            <form id="newListForm">
+                <div class="form-group">
+                    <label for="listTitle">Título de la Lista *</label>
+                    <input type="text" id="listTitle" name="title" required 
+                           placeholder="Ej: Películas para ver en verano">
+                </div>
+                
+                <div class="form-group">
+                    <label for="listDescription">Descripción (opcional)</label>
+                    <textarea id="listDescription" name="description" rows="3"
+                              placeholder="Describe de qué trata esta lista..."></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="isPublic" name="is_public">
+                        <span class="checkmark"></span>
+                        Hacer pública (otros usuarios pueden encontrarla)
+                    </label>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelBtn">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Crear Lista</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para compartir -->
+<div id="shareModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>📤 Compartir Lista</h3>
+            <span class="close">&times;</span>
+        </div>
+        <div class="modal-body">
+            <p>Comparte esta lista con otros usuarios usando el siguiente enlace:</p>
+            <div class="share-link-container">
+                <input type="text" id="shareLink" readonly>
+                <button id="copyLinkBtn" class="btn btn-secondary">📋 Copiar</button>
+            </div>
+            <p class="share-info">
+                💡 Cualquier persona con este enlace podrá ver tu lista de películas
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Modal para nueva lista
+const newListModal = document.getElementById('newListModal');
+const shareModal = document.getElementById('shareModal');
+const newListBtn = document.getElementById('newListBtn');
+const createFirstListBtn = document.getElementById('createFirstListBtn');
+
+// Abrir modal de nueva lista
+[newListBtn, createFirstListBtn].forEach(btn => {
+    if (btn) {
+        btn.addEventListener('click', () => {
+            newListModal.style.display = 'block';
+        });
+    }
+});
+
+// Cerrar modales
+document.querySelectorAll('.close, #cancelBtn').forEach(element => {
+    element.addEventListener('click', () => {
+        newListModal.style.display = 'none';
+        shareModal.style.display = 'none';
+    });
+});
+
+// Crear nueva lista
+document.getElementById('newListForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const formData = {
+        title: document.getElementById('listTitle').value.trim(),
+        description: document.getElementById('listDescription').value.trim(),
+        is_public: document.getElementById('isPublic').checked
+    };
+    
+    if (!formData.title) {
+        alert('El título es obligatorio');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/lista/nueva', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(formData)
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            alert('Lista creada exitosamente');
+            location.reload();
+        } else {
+            alert(result.error || 'Error al crear la lista');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error al crear la lista');
+    }
+});
+
+// Compartir lista
+document.querySelectorAll('.share-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const shareCode = btn.dataset.shareCode;
+        const shareLink = `${window.location.origin}/lista/compartir/${shareCode}`;
+        
+        document.getElementById('shareLink').value = shareLink;
+        shareModal.style.display = 'block';
+    });
+});
+
+// Copiar enlace
+document.getElementById('copyLinkBtn').addEventListener('click', () => {
+    const shareLink = document.getElementById('shareLink');
+    shareLink.select();
+    document.execCommand('copy');
+    
+    const btn = document.getElementById('copyLinkBtn');
+    const originalText = btn.textContent;
+    btn.textContent = '✅ Copiado';
+    setTimeout(() => {
+        btn.textContent = originalText;
+    }, 2000);
+});
+
+// Eliminar lista
+document.querySelectorAll('.delete-list-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        if (!confirm('¿Estás seguro de que quieres eliminar esta lista? Esta acción no se puede deshacer.')) {
+            return;
+        }
+        
+        const listId = btn.dataset.listId;
+        
+        try {
+            const response = await fetch(`/lista/${listId}/eliminar`, {
+                method: 'POST'
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok) {
+                alert('Lista eliminada exitosamente');
+                location.reload();
+            } else {
+                alert(result.error || 'Error al eliminar la lista');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Error al eliminar la lista');
+        }
+    });
+});
+
+// Cerrar modal al hacer clic fuera
+window.addEventListener('click', (e) => {
+    if (e.target === newListModal) {
+        newListModal.style.display = 'none';
+    }
+    if (e.target === shareModal) {
+        shareModal.style.display = 'none';
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block title %}Nueva Lista de Películas{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/lists.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="page-title">Nueva Lista de Películas</h1>
+    <p class="page-subtitle">Crea una lista personalizada para organizar las películas que quieres ver</p>
+    
+    <div class="form-container">
+        <form id="newListForm" class="list-form">
+            <div class="form-group">
+                <label for="listTitle">Título de la lista *</label>
+                <input type="text" id="listTitle" name="title" class="form-control" 
+                       placeholder="Ej: Películas para el fin de semana" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="listDescription">Descripción</label>
+                <textarea id="listDescription" name="description" class="form-control" 
+                          placeholder="Describe el tema o propósito de tu lista..."></textarea>
+            </div>
+            
+            <div class="form-group">
+                <div class="checkbox-group">
+                    <input type="checkbox" id="isPublic" name="is_public">
+                    <label for="isPublic">Lista pública (otros usuarios podrán verla)</label>
+                </div>
+            </div>
+            
+            <div class="form-actions">
+                <a href="{{ url_for('movie_lists') }}" class="btn btn-secondary">Cancelar</a>
+                <button type="submit" class="btn btn-primary">Crear Lista</button>
+            </div>
+        </form>
+        
+        <div class="tips-section">
+            <h3>💡 Consejos</h3>
+            <ul class="tips-list">
+                <li>Elige un título descriptivo que otros usuarios puedan entender</li>
+                <li>Puedes agregar películas a tu lista una vez creada</li>
+                <li>Las listas públicas aparecerán en el explorador de listas</li>
+                <li>Puedes compartir el enlace de tu lista con amigos</li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('newListForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const formData = {
+        title: document.getElementById('listTitle').value.trim(),
+        description: document.getElementById('listDescription').value.trim(),
+        is_public: document.getElementById('isPublic').checked
+    };
+    
+    if (!formData.title) {
+        alert('El título es obligatorio');
+        document.getElementById('listTitle').focus();
+        return;
+    }
+    
+    // Mostrar loading
+    const submitBtn = document.querySelector('button[type="submit"]');
+    const originalText = submitBtn.textContent;
+    submitBtn.textContent = 'Creando...';
+    submitBtn.disabled = true;
+    
+    try {
+        const response = await fetch('/lista/nueva', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(formData)
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            window.location.href = `/lista/${result.id}`;
+        } else {
+            alert(result.error || 'Error al crear la lista');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error de conexión');
+    } finally {
+        submitBtn.textContent = originalText;
+        submitBtn.disabled = false;
+    }
+});
+
+// Auto-resize textarea
+document.getElementById('listDescription').addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = this.scrollHeight + 'px';
+});
+</script>
+{% endblock %}
