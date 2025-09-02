@@ -231,7 +231,7 @@ document.getElementById('manualAddForm').addEventListener('submit', async (e) =>
     };
     
     if (!movieData.title) {
-        alert('El título es obligatorio');
+        await showAlert('Campo requerido', 'El título es obligatorio', 'warning');
         return;
     }
     
@@ -245,14 +245,14 @@ document.getElementById('manualAddForm').addEventListener('submit', async (e) =>
         const result = await response.json();
         
         if (response.ok) {
-            alert('Película agregada exitosamente');
+            await showAlert('🎬 ¡Agregada!', 'Película agregada exitosamente', 'success');
             location.reload();
         } else {
-            alert(result.error || 'Error al agregar la película');
+            await showAlert('Error', result.error || 'Error al agregar la película', 'error');
         }
     } catch (error) {
         console.error('Error:', error);
-        alert('Error al agregar la película');
+        await showAlert('Error', 'Error al agregar la película', 'error');
     }
 });
 
@@ -272,11 +272,11 @@ document.querySelectorAll('.toggle-watched').forEach(btn => {
             if (response.ok) {
                 location.reload();
             } else {
-                alert(result.error || 'Error al actualizar el estado');
+                await showAlert('Error', result.error || 'Error al actualizar el estado', 'error');
             }
         } catch (error) {
             console.error('Error:', error);
-            alert('Error al actualizar el estado');
+            await showAlert('Error', 'Error al actualizar el estado', 'error');
         }
     });
 });
@@ -284,7 +284,13 @@ document.querySelectorAll('.toggle-watched').forEach(btn => {
 // Eliminar película
 document.querySelectorAll('.remove-movie').forEach(btn => {
     btn.addEventListener('click', async () => {
-        if (!confirm('¿Eliminar esta película de la lista?')) return;
+        const confirmed = await showConfirm(
+            '¿Eliminar película?', 
+            '¿Eliminar esta película de la lista?',
+            { confirmText: 'Sí, eliminar', cancelText: 'Cancelar', dangerous: true }
+        );
+        
+        if (!confirmed) return;
         
         const movieId = btn.dataset.movieId;
         const listId = btn.dataset.listId;
@@ -299,11 +305,11 @@ document.querySelectorAll('.remove-movie').forEach(btn => {
             if (response.ok) {
                 location.reload();
             } else {
-                alert(result.error || 'Error al eliminar la película');
+                await showAlert('Error', result.error || 'Error al eliminar la película', 'error');
             }
         } catch (error) {
             console.error('Error:', error);
-            alert('Error al eliminar la película');
+            await showAlert('Error', 'Error al eliminar la película', 'error');
         }
     });
 });
@@ -339,7 +345,7 @@ document.querySelectorAll('.add-to-downloads').forEach(btn => {
         const year = btn.dataset.year;
         
         // Aquí se puede integrar con la función de descarga existente
-        alert(`Función de descarga próximamente para: ${title} (${year})`);
+        await showAlert('🚧 Próximamente', `Función de descarga próximamente para: ${title} (${year})`, 'info');
     });
 });
 </script>

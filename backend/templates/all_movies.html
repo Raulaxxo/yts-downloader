@@ -73,17 +73,17 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         })
         .then(response => response.json())
-        .then(data => {
+        .then(async data => {
             if (data.message) {
-                alert('Estados actualizados correctamente');
+                await showAlert('🔄 ¡Actualizado!', 'Estados actualizados correctamente', 'success');
                 location.reload(); // Recargar para mostrar cambios
             } else {
-                alert('Error al actualizar estados: ' + (data.error || 'Error desconocido'));
+                await showAlert('Error', 'Error al actualizar estados: ' + (data.error || 'Error desconocido'), 'error');
             }
         })
-        .catch(error => {
+        .catch(async error => {
             console.error('Error:', error);
-            alert('Error al actualizar estados');
+            await showAlert('Error', 'Error al actualizar estados', 'error');
         })
         .finally(() => {
             checkStatusBtn.disabled = false;

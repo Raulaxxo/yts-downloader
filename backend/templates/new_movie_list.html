@@ -63,7 +63,7 @@ document.getElementById('newListForm').addEventListener('submit', async (e) => {
     };
     
     if (!formData.title) {
-        alert('El título es obligatorio');
+        await showAlert('Campo requerido', 'El título es obligatorio', 'warning');
         document.getElementById('listTitle').focus();
         return;
     }
@@ -88,11 +88,11 @@ document.getElementById('newListForm').addEventListener('submit', async (e) => {
         if (response.ok) {
             window.location.href = `/lista/${result.id}`;
         } else {
-            alert(result.error || 'Error al crear la lista');
+            await showAlert('Error', result.error || 'Error al crear la lista', 'error');
         }
     } catch (error) {
         console.error('Error:', error);
-        alert('Error de conexión');
+        await showAlert('Error', 'Error de conexión', 'error');
     } finally {
         submitBtn.textContent = originalText;
         submitBtn.disabled = false;

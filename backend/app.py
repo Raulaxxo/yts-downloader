@@ -1133,6 +1133,200 @@ def friend_lists(friend_id):
     
     return render_template('friend_lists.html', friend=friend, lists=friend_lists)
 
+# === RUTAS DE PERFIL ===
+
+def ensure_profile_fields(user):
+    """Asegurar que el usuario tenga todos los campos del perfil"""
+    try:
+        needs_save = False
+        
+        if not user.full_name:
+            user.full_name = user.username.title()
+            needs_save = True
+            
+        if not user.email:
+            user.email = f'{user.username}@example.com'
+            needs_save = True
+            
+        if not user.bio:
+            if user.created_at:
+                try:
+                    month_year = user.created_at.strftime('%B %Y')
+                    user.bio = f'Usuario registrado desde {month_year}'
+                except:
+                    user.bio = 'Usuario de la plataforma YTS Downloader'
+            else:
+                user.bio = 'Usuario de la plataforma YTS Downloader'
+            needs_save = True
+            
+        if user.is_public is None:
+            user.is_public = True
+            needs_save = True
+            
+        if user.show_stats is None:
+            user.show_stats = True
+            needs_save = True
+            
+        if user.email_notifications is None:
+            user.email_notifications = True
+            needs_save = True
+        
+        if needs_save:
+            try:
+                db.session.commit()
+            except Exception as e:
+                print(f"Error saving profile fields: {e}")
+                db.session.rollback()
+        
+        return user
+        
+    except Exception as e:
+        print(f"Error in ensure_profile_fields: {e}")
+        return user
+
+@app.route('/perfil')
+@login_required
+def profile():
+    """Ver perfil del usuario actual"""
+    try:
+        # Asegurar que el usuario tenga todos los campos del perfil
+        ensure_profile_fields(current_user)
+        
+        # Calcular estadísticas básicas
+        stats = {
+            'downloads': 0,
+            'lists': 0,
+            'friends': 0
+        }
+        
+        try:
+            stats['downloads'] = Download.query.filter_by(user_id=current_user.id).count()
+        except Exception as e:
+            print(f"Error calculando downloads: {e}")
+        
+        try:
+            stats['lists'] = MovieList.query.filter_by(creator_id=current_user.id).count()
+        except Exception as e:
+            print(f"Error calculando lists: {e}")
+        
+        try:
+            stats['friends'] = db.session.query(Friendship).filter(
+                ((Friendship.requester_id == current_user.id) | (Friendship.addressee_id == current_user.id)),
+                Friendship.status == 'accepted'
+            ).count()
+        except Exception as e:
+            print(f"Error calculando friends: {e}")
+        
+        # Obtener listas y descargas del usuario de manera segura
+        lists = []
+        downloads = []
+        
+        try:
+            # Obtener listas sin cargar relaciones problemáticas
+            lists_query = MovieList.query.filter_by(creator_id=current_user.id).limit(10)
+            lists = lists_query.all()
+            print(f"Lists encontradas: {len(lists)}")
+        except Exception as e:
+            print(f"Error obteniendo listas: {e}")
+            lists = []
+        
+        try:
+            downloads = Download.query.filter_by(user_id=current_user.id).order_by(Download.download_date.desc()).limit(10).all()
+            print(f"Downloads encontradas: {len(downloads)}")
+        except Exception as e:
+            print(f"Error obteniendo descargas: {e}")
+            downloads = []
+        
+        return render_template('profile_enhanced.html', user=current_user, stats=stats, lists=lists, downloads=downloads)
+        
+    except Exception as e:
+        print(f"Error general en profile(): {e}")
+        import traceback
+        traceback.print_exc()
+        return f"Error en perfil: {str(e)}", 500
+
+@app.route('/perfil/editar', methods=['GET', 'POST'])
+@login_required
+def edit_profile():
+    """Editar perfil del usuario"""
+    # Asegurar que el usuario tenga todos los campos del perfil
+    ensure_profile_fields(current_user)
+    
+    if request.method == 'POST':
+        try:
+            data = request.get_json()
+            
+            # Actualizar campos del perfil
+            current_user.full_name = data.get('full_name', '').strip()
+            current_user.email = data.get('email', '').strip()
+            current_user.bio = data.get('bio', '').strip()
+            current_user.location = data.get('location', '').strip()
+            current_user.avatar_url = data.get('avatar_url', '').strip()
+            
+            # Configuraciones
+            current_user.is_public = data.get('is_public', True)
+            current_user.show_stats = data.get('show_stats', True)
+            current_user.email_notifications = data.get('email_notifications', True)
+            
+            # Validar email si se proporcionó
+            if current_user.email:
+                existing_user = UserModel.query.filter(
+                    UserModel.email == current_user.email,
+                    UserModel.id != current_user.id
+                ).first()
+                
+                if existing_user:
+                    return {"error": "Este email ya está en uso"}, 400
+            
+            db.session.commit()
+            return {"message": "Perfil actualizado exitosamente"}
+            
+        except Exception as e:
+            db.session.rollback()
+            return {"error": str(e)}, 500
+    
+    return render_template('edit_profile.html', user=current_user)
+
+@app.route('/perfil/<int:user_id>')
+@login_required
+def view_profile(user_id):
+    """Ver perfil de otro usuario"""
+    user = UserModel.query.get_or_404(user_id)
+    
+    # Asegurar que el usuario tenga todos los campos del perfil
+    ensure_profile_fields(user)
+    
+    # Verificar si el perfil es público o si son amigos
+    is_friend = False
+    if user_id != current_user.id:
+        friendship = Friendship.query.filter(
+            ((Friendship.requester_id == current_user.id) & (Friendship.addressee_id == user_id)) |
+            ((Friendship.requester_id == user_id) & (Friendship.addressee_id == current_user.id)),
+            Friendship.status == 'accepted'
+        ).first()
+        is_friend = bool(friendship)
+        
+        if not user.is_public and not is_friend:
+            return {"error": "Este perfil es privado"}, 403
+    
+    # Calcular estadísticas si están habilitadas
+    stats = None
+    if user.show_stats or user_id == current_user.id or is_friend:
+        total_downloads = Download.query.filter_by(user_id=user_id).count()
+        total_lists = MovieList.query.filter_by(creator_id=user_id).count()
+        total_friends = db.session.query(Friendship).filter(
+            ((Friendship.requester_id == user_id) | (Friendship.addressee_id == user_id)),
+            Friendship.status == 'accepted'
+        ).count()
+        
+        stats = {
+            'downloads': total_downloads,
+            'lists': total_lists,
+            'friends': total_friends
+        }
+    
+    return render_template('profile.html', user=user, stats=stats, is_friend=is_friend)
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
 
