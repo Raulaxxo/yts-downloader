@@ -299,14 +299,14 @@ async function addMovie(movieData) {
         const result = await response.json();
         
         if (response.ok) {
-            alert(result.message);
+            await showAlert('🎬 ¡Agregada!', result.message, 'success');
             window.location.href = '/'; // Redirigir a la lista de películas
         } else {
-            alert(result.error || 'Error al agregar la película');
+            await showAlert('Error', result.error || 'Error al agregar la película', 'error');
         }
     } catch (error) {
         console.error('Error:', error);
-        alert('Error al comunicarse con el servidor');
+        await showAlert('Error', 'Error al comunicarse con el servidor', 'error');
     }
 }
 
@@ -416,14 +416,14 @@ async function addToExistingList(listId) {
         const result = await response.json();
         
         if (response.ok) {
-            alert('Película agregada a la lista exitosamente');
+            await showAlert('📋 ¡Agregada!', 'Película agregada a la lista exitosamente', 'success');
             addToListModal.style.display = 'none';
         } else {
-            alert(result.error || 'Error al agregar la película a la lista');
+            await showAlert('Error', result.error || 'Error al agregar la película a la lista', 'error');
         }
     } catch (error) {
         console.error('Error:', error);
-        alert('Error al agregar la película a la lista');
+        await showAlert('Error', 'Error al agregar la película a la lista', 'error');
     }
 }
 
@@ -432,7 +432,7 @@ document.getElementById('createAndAddBtn').addEventListener('click', async () =>
     const listTitle = document.getElementById('newListTitle').value.trim();
     
     if (!listTitle) {
-        alert('Por favor escribe un nombre para la lista');
+        await showAlert('Campo requerido', 'Por favor escribe un nombre para la lista', 'warning');
         return;
     }
     
@@ -470,18 +470,18 @@ document.getElementById('createAndAddBtn').addEventListener('click', async () =>
             const addResult = await addResponse.json();
             
             if (addResponse.ok) {
-                alert(`Lista "${listTitle}" creada y película agregada exitosamente`);
+                await showAlert('🎉 ¡Lista creada!', `Lista "${listTitle}" creada y película agregada exitosamente`, 'success');
                 addToListModal.style.display = 'none';
                 document.getElementById('newListTitle').value = '';
             } else {
-                alert(addResult.error || 'Error al agregar la película a la lista');
+                await showAlert('Error', addResult.error || 'Error al agregar la película a la lista', 'error');
             }
         } else {
-            alert(createResult.error || 'Error al crear la lista');
+            await showAlert('Error', createResult.error || 'Error al crear la lista', 'error');
         }
     } catch (error) {
         console.error('Error:', error);
-        alert('Error al crear la lista');
+        await showAlert('Error', 'Error al crear la lista', 'error');
     }
 });
 

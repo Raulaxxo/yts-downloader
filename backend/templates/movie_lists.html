@@ -155,7 +155,7 @@ document.getElementById('newListForm').addEventListener('submit', async (e) => {
     };
     
     if (!formData.title) {
-        alert('El título es obligatorio');
+        await showAlert('Campo requerido', 'El título es obligatorio', 'warning');
         return;
     }
     
@@ -169,14 +169,14 @@ document.getElementById('newListForm').addEventListener('submit', async (e) => {
         const result = await response.json();
         
         if (response.ok) {
-            alert('Lista creada exitosamente');
+            await showAlert('📋 ¡Lista creada!', 'Lista creada exitosamente', 'success');
             location.reload();
         } else {
-            alert(result.error || 'Error al crear la lista');
+            await showAlert('Error', result.error || 'Error al crear la lista', 'error');
         }
     } catch (error) {
         console.error('Error:', error);
-        alert('Error al crear la lista');
+        await showAlert('Error', 'Error al crear la lista', 'error');
     }
 });
 
@@ -208,7 +208,13 @@ document.getElementById('copyLinkBtn').addEventListener('click', () => {
 // Eliminar lista
 document.querySelectorAll('.delete-list-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
-        if (!confirm('¿Estás seguro de que quieres eliminar esta lista? Esta acción no se puede deshacer.')) {
+        const confirmed = await showConfirm(
+            '¿Eliminar lista?', 
+            '¿Estás seguro de que quieres eliminar esta lista? Esta acción no se puede deshacer.',
+            { confirmText: 'Sí, eliminar', cancelText: 'Cancelar', dangerous: true }
+        );
+        
+        if (!confirmed) {
             return;
         }
         
@@ -222,14 +228,14 @@ document.querySelectorAll('.delete-list-btn').forEach(btn => {
             const result = await response.json();
             
             if (response.ok) {
-                alert('Lista eliminada exitosamente');
+                await showAlert('🗑️ Eliminada', 'Lista eliminada exitosamente', 'success');
                 location.reload();
             } else {
-                alert(result.error || 'Error al eliminar la lista');
+                await showAlert('Error', result.error || 'Error al eliminar la lista', 'error');
             }
         } catch (error) {
             console.error('Error:', error);
-            alert('Error al eliminar la lista');
+            await showAlert('Error', 'Error al eliminar la lista', 'error');
         }
     });
 });

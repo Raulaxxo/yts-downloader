@@ -97,17 +97,17 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         })
         .then(response => response.json())
-        .then(data => {
+        .then(async data => {
             if (data.message) {
-                alert('Estados actualizados correctamente');
+                await showAlert('¡Excelente!', 'Estados actualizados correctamente', 'success');
                 location.reload(); // Recargar para mostrar cambios
             } else {
-                alert('Error al actualizar estados: ' + (data.error || 'Error desconocido'));
+                await showAlert('Error', 'Error al actualizar estados: ' + (data.error || 'Error desconocido'), 'error');
             }
         })
-        .catch(error => {
+        .catch(async error => {
             console.error('Error:', error);
-            alert('Error al actualizar estados');
+            await showAlert('Error', 'Error al actualizar estados', 'error');
         })
         .finally(() => {
             checkStatusBtn.disabled = false;
@@ -127,16 +127,16 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         })
         .then(response => response.json())
-        .then(data => {
+        .then(async data => {
             if (data.message) {
-                alert('Biblioteca de Plex actualizada correctamente');
+                await showAlert('📺 ¡Perfecto!', 'Biblioteca de Plex actualizada correctamente', 'success');
             } else {
-                alert('Error al actualizar Plex: ' + (data.error || 'Error desconocido'));
+                await showAlert('Error', 'Error al actualizar Plex: ' + (data.error || 'Error desconocido'), 'error');
             }
         })
-        .catch(error => {
+        .catch(async error => {
             console.error('Error:', error);
-            alert('Error al actualizar Plex');
+            await showAlert('Error', 'Error al actualizar Plex', 'error');
         })
         .finally(() => {
             refreshPlexBtn.disabled = false;
@@ -189,19 +189,25 @@ async function startDownload(movieId) {
         const data = await response.json();
         
         if (response.ok) {
-            alert('Descarga iniciada correctamente');
+            await showAlert('🎬 ¡Descarga iniciada!', 'Descarga iniciada correctamente', 'success');
             location.reload();
         } else {
-            alert(data.error || 'Error al iniciar la descarga');
+            await showAlert('Error', data.error || 'Error al iniciar la descarga', 'error');
         }
     } catch (error) {
         console.error('Error:', error);
-        alert('Error al comunicarse con el servidor');
+        await showAlert('Error', 'Error al comunicarse con el servidor', 'error');
     }
 }
 
 async function deleteMovie(movieId) {
-    if (confirm('¿Estás seguro de que quieres eliminar esta película de tu lista?')) {
+    const confirmed = await showConfirm(
+        '¿Eliminar película?', 
+        '¿Estás seguro de que quieres eliminar esta película de tu lista?',
+        { confirmText: 'Sí, eliminar', cancelText: 'Cancelar', dangerous: true }
+    );
+    
+    if (confirmed) {
         try {
             const response = await fetch(`/delete/${movieId}`, {
                 method: 'POST'
@@ -209,14 +215,14 @@ async function deleteMovie(movieId) {
             const data = await response.json();
             
             if (response.ok) {
-                alert('Película eliminada correctamente');
+                await showAlert('🗑️ Eliminada', 'Película eliminada correctamente', 'success');
                 location.reload();
             } else {
-                alert(data.error || 'Error al eliminar la película');
+                await showAlert('Error', data.error || 'Error al eliminar la película', 'error');
             }
         } catch (error) {
             console.error('Error:', error);
-            alert('Error al comunicarse con el servidor');
+            await showAlert('Error', 'Error al comunicarse con el servidor', 'error');
         }
     }
 }

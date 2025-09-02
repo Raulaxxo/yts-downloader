@@ -185,8 +185,8 @@ function copyShareLink(shareCode) {
     const url = `${window.location.origin}/lista/compartida/${shareCode}`;
     
     if (navigator.clipboard) {
-        navigator.clipboard.writeText(url).then(() => {
-            alert('Enlace copiado al portapapeles');
+        navigator.clipboard.writeText(url).then(async () => {
+            await showAlert('📋 ¡Copiado!', 'Enlace copiado al portapapeles', 'success');
         }).catch(err => {
             console.error('Error copying to clipboard:', err);
             fallbackCopy(url);
@@ -205,10 +205,10 @@ function fallbackCopy(text) {
     
     try {
         document.execCommand('copy');
-        alert('Enlace copiado al portapapeles');
+        showAlert('📋 ¡Copiado!', 'Enlace copiado al portapapeles', 'success');
     } catch (err) {
         console.error('Fallback copy failed:', err);
-        alert('No se pudo copiar el enlace. URL: ' + text);
+        showAlert('Error', 'No se pudo copiar el enlace. URL: ' + text, 'error');
     }
     
     document.body.removeChild(textArea);
