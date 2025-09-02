@@ -7,6 +7,7 @@ import requests
 import urllib.parse
 import json
 import os
+import uuid
 
 # Inicializar extensiones
 db = SQLAlchemy()
@@ -1286,6 +1287,53 @@ def edit_profile():
             return {"error": str(e)}, 500
     
     return render_template('edit_profile.html', user=current_user)
+
+@app.route('/perfil/upload-avatar', methods=['POST'])
+@login_required
+def upload_avatar():
+    """Subir imagen de avatar"""
+    try:
+        if 'avatar_file' not in request.files:
+            return {"error": "No se ha seleccionado ningún archivo"}, 400
+        
+        file = request.files['avatar_file']
+        if file.filename == '':
+            return {"error": "No se ha seleccionado ningún archivo"}, 400
+        
+        # Validar tipo de archivo
+        allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+        file_extension = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+        
+        if file_extension not in allowed_extensions:
+            return {"error": "Tipo de archivo no permitido. Usa: PNG, JPG, JPEG, GIF, WEBP"}, 400
+        
+        # Validar tamaño (5MB)
+        file.seek(0, 2)  # Ir al final del archivo
+        file_size = file.tell()
+        file.seek(0)  # Volver al inicio
+        
+        if file_size > 5 * 1024 * 1024:  # 5MB
+            return {"error": "El archivo es demasiado grande. Máximo 5MB"}, 400
+        
+        # Generar nombre único para el archivo
+        unique_filename = f"{uuid.uuid4().hex}_{current_user.id}.{file_extension}"
+        
+        # Crear directorio de avatares si no existe
+        avatar_dir = os.path.join('static', 'avatars')
+        os.makedirs(avatar_dir, exist_ok=True)
+        
+        # Guardar archivo
+        file_path = os.path.join(avatar_dir, unique_filename)
+        file.save(file_path)
+        
+        # Generar URL para acceder al archivo
+        avatar_url = f"/static/avatars/{unique_filename}"
+        
+        return {"url": avatar_url, "message": "Avatar subido exitosamente"}
+        
+    except Exception as e:
+        print(f"Error subiendo avatar: {e}")
+        return {"error": "Error interno del servidor"}, 500
 
 @app.route('/perfil/<int:user_id>')
 @login_required

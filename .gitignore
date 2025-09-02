@@ -64,3 +64,24 @@ yarn-error.log*
 *.tmp
 *.bak
 *.temp
+
+# Archivos de cookies temporales
+cookies*.txt
+*_cookies.txt
+
+# Scripts de migración ejecutados
+migrate_*.py
+fix_db.py
+update_db.py
+
+# Logs y archivos de proceso
+*.log
+*.pid
+supervisord.log
+supervisord.pid
+monitor.log
+
+# Versiones antiguas de archivos
+*_old.py
+*_new.py
+*_backup.py
