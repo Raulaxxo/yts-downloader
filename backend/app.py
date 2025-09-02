@@ -637,10 +637,26 @@ def webhook_complete():
                 break
         
         if movie_found:
-            return {"message": "Película marcada como completada", "movie_found": True}, 200
+            return {
+                "message": "Película marcada como completada", 
+                "movie_found": True,
+                "organization_info": {
+                    "original_name": torrent_name,
+                    "organized_path": "/downloads/movies/",
+                    "note": "Los archivos serán organizados y renombrados automáticamente"
+                }
+            }, 200
         else:
             app.logger.warning(f"No se encontró película para torrent: {torrent_name}")
-            return {"message": "Torrent no encontrado en base de datos", "movie_found": False}, 200
+            return {
+                "message": "Torrent no encontrado en base de datos", 
+                "movie_found": False,
+                "organization_info": {
+                    "original_name": torrent_name,
+                    "organized_path": "/downloads/movies/",
+                    "note": "Archivos organizados automáticamente aunque no esté en la base de datos"
+                }
+            }, 200
             
     except Exception as e:
         app.logger.error(f"Error en webhook: {str(e)}")
