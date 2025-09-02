@@ -22,29 +22,16 @@
                 <div class="avatar-section">
                     <div class="current-avatar">
                         {% if user.avatar_url %}
-                            <img src="{{ user.avatar_url }}" alt="Avatar" class="avatar-preview" id="avatarPreview">
+                            <img src="{{ user.avatar_url }}" alt="Avatar" class="avatar-preview">
                         {% else %}
-                            <div class="avatar-placeholder" id="avatarPlaceholder">
+                            <div class="avatar-placeholder">
                                 <span class="avatar-initials">{{ user.username[0].upper() }}</span>
                             </div>
                         {% endif %}
                     </div>
                     <div class="avatar-controls">
                         <div class="form-group">
-                            <label for="avatar_file">Subir Nueva Imagen</label>
-                            <div class="file-upload-wrapper">
-                                <input type="file" id="avatar_file" name="avatar_file" 
-                                       accept="image/*" class="file-input">
-                                <label for="avatar_file" class="file-upload-btn">
-                                    📁 Seleccionar Imagen
-                                </label>
-                                <span class="file-name" id="fileName">Ningún archivo seleccionado</span>
-                            </div>
-                            <small class="form-help">Formatos soportados: JPG, PNG, GIF. Máximo 5MB</small>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="avatar_url">O usar URL del Avatar</label>
+                            <label for="avatar_url">URL del Avatar</label>
                             <input type="url" id="avatar_url" name="avatar_url" 
                                    value="{{ user.avatar_url or '' }}" 
                                    placeholder="https://ejemplo.com/mi-avatar.jpg">
@@ -240,36 +227,6 @@ document.getElementById('editProfileForm').addEventListener('submit', async func
         submitBtn.textContent = '💾 Guardando...';
         submitBtn.disabled = true;
         
-        // Verificar si hay un archivo para subir
-        const fileInput = document.getElementById('avatar_file');
-        let uploadedImageUrl = null;
-        
-        if (fileInput.files[0]) {
-            // Subir archivo primero
-            const formData = new FormData();
-            formData.append('avatar_file', fileInput.files[0]);
-            
-            try {
-                const uploadResponse = await fetch('/perfil/upload-avatar', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                if (uploadResponse.ok) {
-                    const uploadResult = await uploadResponse.json();
-                    uploadedImageUrl = uploadResult.url;
-                    data.avatar_url = uploadedImageUrl; // Usar la URL del archivo subido
-                } else {
-                    throw new Error('Error al subir la imagen');
-                }
-            } catch (uploadError) {
-                await showAlert('Error', 'Error al subir la imagen', 'error');
-                submitBtn.textContent = originalText;
-                submitBtn.disabled = false;
-                return;
-            }
-        }
-        
         const response = await fetch('/perfil/editar', {
             method: 'POST',
             headers: {
@@ -292,69 +249,6 @@ document.getElementById('editProfileForm').addEventListener('submit', async func
     } finally {
         submitBtn.textContent = originalText;
         submitBtn.disabled = false;
-    }
-});
-
-// Manejar vista previa de avatar
-document.getElementById('avatar_file').addEventListener('change', function(e) {
-    const file = e.target.files[0];
-    const fileName = document.getElementById('fileName');
-    const avatarPreview = document.getElementById('avatarPreview');
-    const avatarPlaceholder = document.getElementById('avatarPlaceholder');
-    
-    if (file) {
-        // Validar tipo de archivo
-        if (!file.type.startsWith('image/')) {
-            showAlert('Error', 'Por favor selecciona un archivo de imagen válido', 'error');
-            e.target.value = '';
-            return;
-        }
-        
-        // Validar tamaño (5MB)
-        if (file.size > 5 * 1024 * 1024) {
-            showAlert('Error', 'La imagen es demasiado grande. Máximo 5MB', 'error');
-            e.target.value = '';
-            return;
-        }
-        
-        fileName.textContent = file.name;
-        fileName.classList.add('has-file');
-        
-        // Crear vista previa
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            if (avatarPreview) {
-                avatarPreview.src = e.target.result;
-            } else {
-                // Crear nuevo elemento img si no existe
-                const img = document.createElement('img');
-                img.src = e.target.result;
-                img.alt = 'Avatar';
-                img.className = 'avatar-preview';
-                img.id = 'avatarPreview';
-                
-                // Reemplazar placeholder con imagen
-                if (avatarPlaceholder) {
-                    avatarPlaceholder.parentNode.replaceChild(img, avatarPlaceholder);
-                }
-            }
-        };
-        reader.readAsDataURL(file);
-    } else {
-        fileName.textContent = 'Ningún archivo seleccionado';
-        fileName.classList.remove('has-file');
-    }
-});
-
-// Limpiar vista previa cuando se cambia URL
-document.getElementById('avatar_url').addEventListener('input', function(e) {
-    const fileInput = document.getElementById('avatar_file');
-    if (e.target.value && fileInput.value) {
-        if (confirm('¿Quieres usar la URL en lugar del archivo seleccionado?')) {
-            fileInput.value = '';
-            document.getElementById('fileName').textContent = 'Ningún archivo seleccionado';
-            document.getElementById('fileName').classList.remove('has-file');
-        }
     }
 });
 </script>
