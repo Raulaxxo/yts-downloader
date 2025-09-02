@@ -17,6 +17,21 @@ class User(UserMixin):
             username = db.Column(db.String(80), unique=True, nullable=False)
             password = db.Column(db.String(120), nullable=False)
             created_at = db.Column(db.DateTime, default=datetime.utcnow)
+            
+            # Campos del perfil
+            full_name = db.Column(db.String(200))
+            email = db.Column(db.String(120), unique=True)
+            bio = db.Column(db.Text)
+            avatar_url = db.Column(db.String(500))
+            location = db.Column(db.String(100))
+            birth_date = db.Column(db.Date)
+            
+            # Configuraciones
+            is_public = db.Column(db.Boolean, default=True)
+            show_stats = db.Column(db.Boolean, default=True)
+            email_notifications = db.Column(db.Boolean, default=True)
+            
+            # Relaciones
             downloads = db.relationship('Download', backref='user', lazy=True)
             movie_lists = db.relationship('MovieList', backref='creator', lazy=True)
             

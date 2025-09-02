@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+
+{% block title %}Mi Perfil - YTS Downloader{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/profile.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="profile-container">
+    <div class="profile-header">
+        <div class="profile-avatar">
+            {% if user.avatar_url %}
+                <img src="{{ user.avatar_url }}" alt="Avatar" class="avatar-image">
+            {% else %}
+                <div class="avatar-placeholder">
+                    <span class="avatar-initials">{{ user.username[0].upper() }}</span>
+                </div>
+            {% endif %}
+        </div>
+        
+        <div class="profile-info">
+            <h1 class="profile-name">
+                {% if user.full_name %}
+                    {{ user.full_name }}
+                    <span class="username">@{{ user.username }}</span>
+                {% else %}
+                    {{ user.username }}
+                {% endif %}
+            </h1>
+            
+            {% if user.bio %}
+            <p class="profile-bio">{{ user.bio }}</p>
+            {% endif %}
+            
+            <div class="profile-meta">
+                {% if user.location %}
+                <span class="meta-item">📍 {{ user.location }}</span>
+                {% endif %}
+                {% if user.email %}
+                <span class="meta-item">✉️ {{ user.email }}</span>
+                {% endif %}
+                <span class="meta-item">📅 Miembro desde {{ user.created_at.strftime('%B %Y') }}</span>
+            </div>
+        </div>
+        
+        <div class="profile-actions">
+            <a href="{{ url_for('edit_profile') }}" class="btn btn-primary">
+                ✏️ Editar Perfil
+            </a>
+        </div>
+    </div>
+
+    {% if stats %}
+    <div class="stats-section">
+        <h2 class="section-title">📊 Estadísticas</h2>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number">{{ stats.downloads }}</div>
+                <div class="stat-label">Películas Descargadas</div>
+                <div class="stat-icon">🎬</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-number">{{ stats.lists }}</div>
+                <div class="stat-label">Listas Creadas</div>
+                <div class="stat-icon">📋</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-number">{{ stats.friends }}</div>
+                <div class="stat-label">Amigos</div>
+                <div class="stat-icon">👥</div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="profile-sections">
+        <div class="section-nav">
+            <button class="nav-btn active" data-section="lists">📋 Mis Listas</button>
+            <button class="nav-btn" data-section="downloads">⬇️ Descargas</button>
+            <button class="nav-btn" data-section="friends">👥 Amigos</button>
+        </div>
+
+        <div class="section-content">
+            <!-- Listas -->
+            <div id="lists-section" class="content-section active">
+                <div class="section-header">
+                    <h3>Mis Listas de Películas</h3>
+                    <span class="btn btn-outline">➕ Nueva Lista</span>
+                </div>
+                <div class="lists-grid">
+                    {% if lists %}
+                        {% for list in lists %}
+                        <div class="list-card">
+                            <div class="list-header">
+                                <h4 class="list-title">
+                                    <span>{{ list.title }}</span>
+                                </h4>
+                                <span class="list-privacy">
+                                    {% if list.is_public %}
+                                        🌐 Pública
+                                    {% else %}
+                                        🔒 Privada
+                                    {% endif %}
+                                </span>
+                            </div>
+                            {% if list.description %}
+                            <p class="list-description">{{ list.description[:100] }}{% if list.description|length > 100 %}...{% endif %}</p>
+                            {% endif %}
+                        <div class="list-meta">
+                            <span>{{ list.movies|length }} películas</span>
+                            <span>Actualizada {{ list.updated_at.strftime('%d/%m/%Y') }}</span>
+                        </div>
+                    </div>
+                        {% endfor %}
+                    {% else %}
+                    <div class="empty-state">
+                        <div class="empty-icon">📋</div>
+                        <h3>No tienes listas aún</h3>
+                        <p>Crea tu primera lista de películas para organizarlas mejor</p>
+                        <span class="btn btn-primary">Crear Primera Lista</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Descargas -->
+            <div id="downloads-section" class="content-section">
+                <div class="section-header">
+                    <h3>Historial de Descargas</h3>
+                </div>
+                <div class="downloads-list">
+                    {% if downloads %}
+                        {% for download in downloads %}
+                        <div class="download-item">
+                            <div class="movie-info">
+                                <h4 class="movie-title">{{ download.movie_title }}</h4>
+                                <span class="movie-year">({{ download.year }})</span>
+                            </div>
+                            <div class="download-meta">
+                                <span class="download-status status-{{ download.status }}">{{ download.status.title() }}</span>
+                                <span class="download-date">{{ download.download_date.strftime('%d/%m/%Y') }}</span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                    <div class="empty-state">
+                        <div class="empty-icon">⬇️</div>
+                        <h3>No hay descargas aún</h3>
+                        <p>Explora películas y descarga las que te gusten</p>
+                        <span class="btn btn-primary">Explorar Películas</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Amigos -->
+            <div id="friends-section" class="content-section">
+                <div class="section-header">
+                    <h3>Mis Amigos</h3>
+                    <span class="btn btn-outline">👥 Gestionar Amigos</span>
+                </div>
+                <div class="friends-grid">
+                    <!-- Se cargará dinámicamente con JavaScript -->
+                    <div class="loading">Cargando amigos...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Navegación entre secciones
+document.querySelectorAll('.nav-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const section = btn.dataset.section;
+        
+        // Actualizar botones
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        
+        // Mostrar sección correspondiente
+        document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
+        document.getElementById(`${section}-section`).classList.add('active');
+        
+        // Cargar amigos si es necesario
+        if (section === 'friends') {
+            loadFriends();
+        }
+    });
+});
+
+// Cargar lista de amigos
+async function loadFriends() {
+    const friendsGrid = document.querySelector('.friends-grid');
+    
+    try {
+        // Simulamos la carga de amigos (se puede implementar una API específica)
+        friendsGrid.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">👥</div>
+                <h3>Gestiona tus amigos</h3>
+                <p>Ve a la sección de amigos para ver y gestionar tus conexiones</p>
+                <span class="btn btn-primary">Ir a Amigos</span>
+            </div>
+        `;
+    } catch (error) {
+        console.error('Error loading friends:', error);
+        friendsGrid.innerHTML = '<div class="error">Error al cargar amigos</div>';
+    }
+}
+</script>
+{% endblock %}

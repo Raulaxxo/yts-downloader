@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block title %}Mi Perfil - YTS Downloader{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/profile.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="profile-container">
+    <div class="profile-header">
+        <div class="avatar-section">
+            {% if user.avatar_url %}
+                <img src="{{ user.avatar_url }}" alt="Avatar" class="profile-avatar">
+            {% else %}
+                <div class="profile-avatar-placeholder">{{ user.username[0].upper() }}</div>
+            {% endif %}
+        </div>
+        <div class="profile-info">
+            <h1>{{ user.full_name or user.username }}</h1>
+            <p class="username">@{{ user.username }}</p>
+            {% if user.bio %}
+                <p class="bio">{{ user.bio }}</p>
+            {% endif %}
+            {% if user.location %}
+                <p class="location">📍 {{ user.location }}</p>
+            {% endif %}
+        </div>
+        <div class="profile-actions">
+            <a href="{{ url_for('edit_profile') }}" class="btn btn-primary">✏️ Editar Perfil</a>
+        </div>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-number">{{ stats.downloads }}</div>
+            <div class="stat-label">Descargas</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">{{ stats.lists }}</div>
+            <div class="stat-label">Listas</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">{{ stats.friends }}</div>
+            <div class="stat-label">Amigos</div>
+        </div>
+    </div>
+
+    <div class="profile-tabs">
+        <div class="tab-nav">
+            <button class="tab-btn active" data-tab="lists">🎬 Mis Listas</button>
+            <button class="tab-btn" data-tab="downloads">📥 Descargas Recientes</button>
+        </div>
+
+        <div class="tab-content">
+            <div id="lists-tab" class="tab-pane active">
+                <div class="section-header">
+                    <h3>Mis Listas de Películas</h3>
+                    <a href="{{ url_for('new_movie_list') }}" class="btn btn-secondary">+ Nueva Lista</a>
+                </div>
+                
+                {% if lists %}
+                    <div class="lists-grid">
+                        {% for list in lists %}
+                            <div class="list-card">
+                                <div class="list-header">
+                                    <h4>{{ list.title }}</h4>
+                                    <span class="list-date">{{ list.created_at.strftime('%d/%m/%Y') }}</span>
+                                </div>
+                                {% if list.description %}
+                                    <p class="list-description">{{ list.description[:100] }}{% if list.description|length > 100 %}...{% endif %}</p>
+                                {% endif %}
+                                <div class="list-stats">
+                                    <span class="movie-count">{{ list.movies|length }} películas</span>
+                                    <span class="visibility">
+                                        {% if list.is_public %}🌐 Pública{% else %}🔒 Privada{% endif %}
+                                    </span>
+                                </div>
+                                <div class="list-actions">
+                                    <a href="/listas/{{ list.id }}" class="btn btn-sm btn-primary">Ver Lista</a>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="empty-state">
+                        <div class="empty-icon">🎬</div>
+                        <h4>No tienes listas aún</h4>
+                        <p>Crea tu primera lista de películas para organizarlas mejor</p>
+                        <a href="{{ url_for('new_movie_list') }}" class="btn btn-primary">Crear Primera Lista</a>
+                    </div>
+                {% endif %}
+            </div>
+
+            <div id="downloads-tab" class="tab-pane">
+                <div class="section-header">
+                    <h3>Descargas Recientes</h3>
+                </div>
+                
+                {% if downloads %}
+                    <div class="downloads-list">
+                        {% for download in downloads %}
+                            <div class="download-item">
+                                <div class="download-info">
+                                    <h4>{{ download.movie_title }}</h4>
+                                    {% if download.year %}
+                                        <span class="year">({{ download.year }})</span>
+                                    {% endif %}
+                                    {% if download.rating %}
+                                        <span class="rating">⭐ {{ download.rating }}</span>
+                                    {% endif %}
+                                </div>
+                                <div class="download-meta">
+                                    <span class="download-date">{{ download.download_date.strftime('%d/%m/%Y %H:%M') }}</span>
+                                    <span class="status status-{{ download.status }}">{{ download.status.title() }}</span>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="empty-state">
+                        <div class="empty-icon">📥</div>
+                        <h4>No hay descargas recientes</h4>
+                        <p>Tus próximas descargas aparecerán aquí</p>
+                        <a href="{{ url_for('search') }}" class="btn btn-primary">Buscar Películas</a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    const tabPanes = document.querySelectorAll('.tab-pane');
+    
+    tabBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            const tabId = this.dataset.tab;
+            
+            // Remove active class from all tabs and panes
+            tabBtns.forEach(b => b.classList.remove('active'));
+            tabPanes.forEach(p => p.classList.remove('active'));
+            
+            // Add active class to clicked tab and corresponding pane
+            this.classList.add('active');
+            document.getElementById(tabId + '-tab').classList.add('active');
+        });
+    });
+});
+</script>
+{% endblock %}

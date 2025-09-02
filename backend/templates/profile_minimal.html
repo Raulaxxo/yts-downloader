@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}Mi Perfil - YTS Downloader{% endblock %}
+
+{% block content %}
+<div style="padding: 2rem;">
+    <h1>Perfil de {{ user.username }}</h1>
+    
+    <div style="background: rgba(255,255,255,0.1); padding: 1rem; border-radius: 10px; margin: 1rem 0;">
+        <h2>Información</h2>
+        <p><strong>Usuario:</strong> {{ user.username }}</p>
+        <p><strong>Nombre:</strong> {{ user.full_name or 'No definido' }}</p>
+        <p><strong>Email:</strong> {{ user.email or 'No definido' }}</p>
+        <p><strong>Bio:</strong> {{ user.bio or 'No definida' }}</p>
+    </div>
+    
+    <div style="background: rgba(255,255,255,0.1); padding: 1rem; border-radius: 10px; margin: 1rem 0;">
+        <h2>Estadísticas</h2>
+        <p><strong>Descargas:</strong> {{ stats.downloads }}</p>
+        <p><strong>Listas:</strong> {{ stats.lists }}</p>
+        <p><strong>Amigos:</strong> {{ stats.friends }}</p>
+    </div>
+    
+    <div style="background: rgba(255,255,255,0.1); padding: 1rem; border-radius: 10px; margin: 1rem 0;">
+        <h2>Mis Listas ({{ lists|length }})</h2>
+        {% if lists %}
+            {% for list in lists %}
+                <div style="padding: 0.5rem; border: 1px solid rgba(255,255,255,0.2); margin: 0.5rem 0; border-radius: 5px;">
+                    <strong>{{ list.title }}</strong>
+                    {% if list.description %}
+                        <br><small>{{ list.description }}</small>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        {% else %}
+            <p>No hay listas creadas</p>
+        {% endif %}
+    </div>
+    
+    <div style="margin-top: 2rem;">
+        <a href="/" class="btn btn-secondary">Volver al Inicio</a>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}Mi Perfil - YTS Downloader{% endblock %}
+
+{% block content %}
+<div style="padding: 2rem;">
+    <h1>Perfil de {{ user.username }}</h1>
+    
+    <div style="background: rgba(255,255,255,0.1); padding: 1rem; border-radius: 10px; margin: 1rem 0;">
+        <h2>Información Básica</h2>
+        <p><strong>Usuario:</strong> {{ user.username }}</p>
+        <p><strong>Nombre:</strong> {{ user.full_name or 'No definido' }}</p>
+        <p><strong>Email:</strong> {{ user.email or 'No definido' }}</p>
+        <p><strong>Bio:</strong> {{ user.bio or 'No definida' }}</p>
+        <p><strong>Miembro desde:</strong> 
+        {% if user.created_at %}
+            {{ user.created_at.strftime('%d/%m/%Y') }}
+        {% else %}
+            Fecha no disponible
+        {% endif %}
+        </p>
+    </div>
+    
+    {% if stats %}
+    <div style="background: rgba(255,255,255,0.1); padding: 1rem; border-radius: 10px; margin: 1rem 0;">
+        <h2>Estadísticas</h2>
+        <p><strong>Descargas:</strong> {{ stats.downloads }}</p>
+        <p><strong>Listas:</strong> {{ stats.lists }}</p>
+        <p><strong>Amigos:</strong> {{ stats.friends }}</p>
+    </div>
+    {% endif %}
+    
+    <div style="margin-top: 2rem;">
+        <a href="{{ url_for('edit_profile') }}" class="btn btn-primary">Editar Perfil</a>
+        <a href="{{ url_for('index') }}" class="btn btn-secondary">Volver al Inicio</a>
+    </div>
+</div>
+{% endblock %}

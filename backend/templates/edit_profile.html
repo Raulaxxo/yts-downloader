@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Perfil - YTS Downloader{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/profile.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="edit-profile-container">
+    <div class="page-header">
+        <h1>✏️ Editar Perfil</h1>
+        <a href="{{ url_for('profile') }}" class="btn btn-outline">← Volver al Perfil</a>
+    </div>
+
+    <form id="editProfileForm" class="profile-form">
+        <div class="form-sections">
+            <!-- Información Personal -->
+            <div class="form-section">
+                <h2 class="section-title">👤 Información Personal</h2>
+                
+                <div class="avatar-section">
+                    <div class="current-avatar">
+                        {% if user.avatar_url %}
+                            <img src="{{ user.avatar_url }}" alt="Avatar" class="avatar-preview">
+                        {% else %}
+                            <div class="avatar-placeholder">
+                                <span class="avatar-initials">{{ user.username[0].upper() }}</span>
+                            </div>
+                        {% endif %}
+                    </div>
+                    <div class="avatar-controls">
+                        <div class="form-group">
+                            <label for="avatar_url">URL del Avatar</label>
+                            <input type="url" id="avatar_url" name="avatar_url" 
+                                   value="{{ user.avatar_url or '' }}" 
+                                   placeholder="https://ejemplo.com/mi-avatar.jpg">
+                            <small class="form-help">Introduce la URL de tu imagen de perfil</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="full_name">Nombre Completo</label>
+                        <input type="text" id="full_name" name="full_name" 
+                               value="{{ user.full_name or '' }}" 
+                               placeholder="Tu nombre completo">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="email">Email</label>
+                        <input type="email" id="email" name="email" 
+                               value="{{ user.email or '' }}" 
+                               placeholder="tu@email.com">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="bio">Biografía</label>
+                    <textarea id="bio" name="bio" rows="4" 
+                              placeholder="Cuéntanos algo sobre ti...">{{ user.bio or '' }}</textarea>
+                    <small class="form-help">Máximo 500 caracteres</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="location">Ubicación</label>
+                    <input type="text" id="location" name="location" 
+                           value="{{ user.location or '' }}" 
+                           placeholder="Ciudad, País">
+                </div>
+            </div>
+
+            <!-- Configuraciones de Privacidad -->
+            <div class="form-section">
+                <h2 class="section-title">🔐 Configuraciones de Privacidad</h2>
+                
+                <div class="toggle-group">
+                    <div class="toggle-item">
+                        <div class="toggle-info">
+                            <label for="is_public">Perfil Público</label>
+                            <small>Permite que otros usuarios vean tu perfil</small>
+                        </div>
+                        <label class="toggle">
+                            <input type="checkbox" id="is_public" name="is_public" 
+                                   {% if user.is_public %}checked{% endif %}>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    
+                    <div class="toggle-item">
+                        <div class="toggle-info">
+                            <label for="show_stats">Mostrar Estadísticas</label>
+                            <small>Permite que otros vean tus estadísticas de películas</small>
+                        </div>
+                        <label class="toggle">
+                            <input type="checkbox" id="show_stats" name="show_stats" 
+                                   {% if user.show_stats %}checked{% endif %}>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    
+                    <div class="toggle-item">
+                        <div class="toggle-info">
+                            <label for="email_notifications">Notificaciones por Email</label>
+                            <small>Recibe notificaciones de amigos y actividad</small>
+                        </div>
+                        <label class="toggle">
+                            <input type="checkbox" id="email_notifications" name="email_notifications" 
+                                   {% if user.email_notifications %}checked{% endif %}>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Información de Cuenta -->
+            <div class="form-section">
+                <h2 class="section-title">🔑 Información de Cuenta</h2>
+                
+                <div class="readonly-info">
+                    <div class="info-item">
+                        <label>Nombre de Usuario</label>
+                        <span class="readonly-value">{{ user.username }}</span>
+                    </div>
+                    
+                    <div class="info-item">
+                        <label>Miembro desde</label>
+                        <span class="readonly-value">{{ user.created_at.strftime('%d de %B de %Y') }}</span>
+                    </div>
+                    
+                    <div class="info-item">
+                        <label>ID de Usuario</label>
+                        <span class="readonly-value">#{{ user.id }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+                💾 Guardar Cambios
+            </button>
+            <a href="{{ url_for('profile') }}" class="btn btn-secondary">
+                ❌ Cancelar
+            </a>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Preview del avatar
+document.getElementById('avatar_url').addEventListener('input', function() {
+    const url = this.value;
+    const preview = document.querySelector('.avatar-preview');
+    const placeholder = document.querySelector('.avatar-placeholder');
+    
+    if (url) {
+        // Crear nueva imagen para probar si carga
+        const img = new Image();
+        img.onload = function() {
+            if (preview) {
+                preview.src = url;
+            } else if (placeholder) {
+                const newImg = document.createElement('img');
+                newImg.src = url;
+                newImg.className = 'avatar-preview';
+                placeholder.parentNode.replaceChild(newImg, placeholder);
+            }
+        };
+        img.onerror = function() {
+            // Si falla, volver al placeholder
+            if (preview) {
+                const newPlaceholder = document.createElement('div');
+                newPlaceholder.className = 'avatar-placeholder';
+                newPlaceholder.innerHTML = '<span class="avatar-initials">{{ user.username[0].upper() }}</span>';
+                preview.parentNode.replaceChild(newPlaceholder, preview);
+            }
+        };
+        img.src = url;
+    }
+});
+
+// Contador de caracteres para la bio
+document.getElementById('bio').addEventListener('input', function() {
+    const maxLength = 500;
+    const current = this.value.length;
+    const remaining = maxLength - current;
+    
+    let help = this.parentElement.querySelector('.form-help');
+    if (!help) {
+        help = document.createElement('small');
+        help.className = 'form-help';
+        this.parentElement.appendChild(help);
+    }
+    
+    help.textContent = `${remaining} caracteres restantes`;
+    help.style.color = remaining < 50 ? '#ff6b6b' : '#6c757d';
+    
+    if (current > maxLength) {
+        this.value = this.value.substring(0, maxLength);
+    }
+});
+
+// Envío del formulario
+document.getElementById('editProfileForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const data = {};
+    
+    // Recopilar datos del formulario
+    formData.forEach((value, key) => {
+        if (key === 'is_public' || key === 'show_stats' || key === 'email_notifications') {
+            data[key] = document.getElementById(key).checked;
+        } else {
+            data[key] = value;
+        }
+    });
+    
+    const submitBtn = this.querySelector('button[type="submit"]');
+    const originalText = submitBtn.textContent;
+    
+    try {
+        submitBtn.textContent = '💾 Guardando...';
+        submitBtn.disabled = true;
+        
+        const response = await fetch('/perfil/editar', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            await showAlert('✅ ¡Guardado!', 'Perfil actualizado exitosamente', 'success');
+            window.location.href = '/perfil';
+        } else {
+            await showAlert('Error', result.error || 'Error al actualizar el perfil', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        await showAlert('Error', 'Error de conexión al actualizar el perfil', 'error');
+    } finally {
+        submitBtn.textContent = originalText;
+        submitBtn.disabled = false;
+    }
+});
+</script>
+{% endblock %}
